@@ -6,8 +6,6 @@ Simple tool for analyzing large bulletins history dataset
 
 To Do
 =====
-- resulting hashmap: print and evaluate from file (for future tasks)
-
 - determine constant part of entry size
 - whole dataset processing, memory consumption, laziness, performance, etc
 
