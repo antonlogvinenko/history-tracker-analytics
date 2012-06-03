@@ -38,9 +38,10 @@
       {:fetch-size 1000}
       (reduce-sql-results results))))
 
-;;Printing
-(defn dump-to-file [big-data]
-  (println big-data))
+;;Printing - not that i'll use these dummy wrappy functions, just not to foget how to print/read
+(defn dump-to-file [file big-data]
+  (spit file big-data))
+(defn read-from-file [file] (load-file file))
 
 (defn -main [[file & other]]
   (let [db (init-db (slurp file))
