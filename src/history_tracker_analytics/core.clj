@@ -23,15 +23,17 @@
      known-entry-size-bytes))
 
 (defn conjoin [coll entry]
-  (let [key (select-keys entry [:type :user_space_id])
+  (let [id (entry :id)
+        key (select-keys entry [:type :user_space_id])
         size (count-entry-size entry)
         update #(+ size (if (nil? %) 0 %))]
-    (update-in coll [key] update)))
+    (do (if (= (mod id 10000) 0) (println id))
+        (update-in coll [key] update))))
 
 (defn reduce-sql-results [results] (reduce conjoin (hash-map) results))
 
 ;;Database functions
-(def sql-query "SELECT id, type, user_space_id, state, context from history limit 1000")
+(def sql-query "SELECT id, type, user_space_id, state, context from history limit 500000")
 
 (defn iterate-history-entries-with [db]
   (sql/with-connection db
@@ -52,6 +54,5 @@
         big-data (iterate-history-entries-with db)]
     (do (println (time/local-now))
         (println "MySQL connection parameters: " db)
-        (println big-data)
-        ;(spit "stats.raw" big-data)
+        (spit "stats.raw" big-data)
         (println (time/local-now)))))
