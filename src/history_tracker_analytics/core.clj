@@ -14,7 +14,8 @@
   (reduce add-row mysql-settings (.split file "\n")))
 
 ;;Counting size
-(def known-entry-size-bytes 10)
+;;omfg constant entry size turned to be 42!!!
+(def known-entry-size-bytes 42)
 
 (defn count-entry-size [{context :context state :state}]
   (+ (* 2 (count context))
@@ -44,6 +45,7 @@
 (defn read-from-file [file] (load-file file))
 
 (use '(incanter core charts stats))
+
 
 (defn -main [& args]
     (view (histogram (sample-normal 1000))))
