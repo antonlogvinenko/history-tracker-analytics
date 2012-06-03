@@ -43,8 +43,6 @@
         (dump-to-file big-data)
         (println (time/local-now)))))
 
-                                        ;1 make it println
-                                        ;2 release
                                         ;3 what to measure?
                                         ;4 write to file
                                         ;build distributions
