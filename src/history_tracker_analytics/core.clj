@@ -40,20 +40,18 @@
       (reduce-sql-results results))))
 
 ;;Printing - not that i'll use these dummy wrappy functions, just not to foget how to print/read
-(defn dump-to-file [file big-data]
-  (spit file big-data))
 (defn read-from-file [file] (load-file file))
 
-(use '(incanter core charts stats))
+;(use '(incanter core charts stats))
+;(defn main [& args]
+;  (view (histogram (sample-normal 1000))))
 
-
-(defn -main [& args]
-    (view (histogram (sample-normal 1000))))
-
-(defn main [[file & other]]
-  (let [db (init-db (slurp file))
+(defn -main [file & other]
+  (let [d (println file)
+        db (init-db (slurp file))
         big-data (iterate-history-entries-with db)]
     (do (println (time/local-now))
         (println "MySQL connection parameters: " db)
-        (dump-to-file big-data)
+        (println big-data)
+        ;(spit "stats.raw" big-data)
         (println (time/local-now)))))
