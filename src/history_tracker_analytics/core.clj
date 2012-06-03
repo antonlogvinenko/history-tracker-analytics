@@ -27,8 +27,9 @@
 
 (defn conjoin [coll entry]
   (let [key (select-keys entry [:type :user_space_id])
+        d (println key)
         size (count-entry-size entry)
-        update #(+ size (if (nil? %1) 0 size))]
+        update #(+ size (if (nil? %) 0 %))]
     (update-in coll [key] update)))
 
 ;;Database functions

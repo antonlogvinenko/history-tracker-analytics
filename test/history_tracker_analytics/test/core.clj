@@ -13,7 +13,7 @@
        {:c "d"} "asdas" {:c "d" :asdas nil}
        {:r "7"} "r=9" {:r "9"}))
 
-(defn init-parameters-from-test)
+(deftest init-parameters-from-test)
 
 
 ;;Counting size tests
@@ -22,10 +22,20 @@
        (count-entry-size {:context "cake" :state "is a lie"})
        (+ known-entry-size-bytes (* 2 12)))))
 
-(deftest conjoin-test)
+(deftest conjoin-test
+  (testing "Conjoin adds new bulletin entry size correctly for both existing and new bulletins"
+    (are [coll entry new-coll] (= new-coll (conjoin coll entry))
+         {}
+         {:type "bulletin" :user_space_id 11 :context "cake" :state "is a lie"}
+         {{:type "bulletin" :user_space_id 11} 34}
+
+         {{:type "bulletin" :user_space_id 11} 7}
+         {:type "bulletin" :user_space_id 11 :context "cake" :state "is a lie"}
+         {{:type "bulletin" :user_space_id 11} 41}
+         )))
 
 ;;Database functions
-(defn iterate-history-entries-with-test)
+(deftest iterate-history-entries-with-test)
 
 ;;Printing test
-(defn dump-to-file-test)
+(deftest dump-to-file-test)
