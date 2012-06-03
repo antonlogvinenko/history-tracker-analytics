@@ -2,6 +2,8 @@
   (:use [history-tracker-analytics.core])
   (:use [clojure.test]))
 
+;;clojure test-is: is, are, testing
+
 ;;Reading settings
 (defn add-row-to-pair-test)
 
