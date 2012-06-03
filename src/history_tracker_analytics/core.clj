@@ -20,7 +20,7 @@
 ;;Counting size
 (def known-entry-size-bytes 10)
 
-(defn count-bytes[text]
+(defn count-bytes [text]
   (* 2 (count text)))
 
 (defn count-entry-size [{context :context state :state}]
@@ -35,7 +35,7 @@
       (update-in coll [key] + size)
       (assoc coll key size))))
 
-;;SQL query
+;;Database functions
 (def sql-query "SELECT id, type, user_space_id, state, context from history limit 1000")
 (defn iterate-history-entries-with [db]
   (sql/with-connection db
