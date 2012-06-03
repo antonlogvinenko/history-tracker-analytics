@@ -29,10 +29,10 @@
     (let [entry {:type "bulletin" :user_space_id 11 :context "cake" :state "is a lie"}]
       (are [coll entry new-coll] (= new-coll (conjoin coll entry))
            {} entry
-           {{:type "bulletin" :user_space_id 11} 34}
+           {{:type "bulletin" :user_space_id 11} (+ 24 known-entry-size-bytes)}
 
            {{:type "bulletin" :user_space_id 11} 7} entry
-           {{:type "bulletin" :user_space_id 11} 41}
+           {{:type "bulletin" :user_space_id 11} (+ 31 known-entry-size-bytes)}
            ))))
 
 (deftest reduce-sql-results-test
