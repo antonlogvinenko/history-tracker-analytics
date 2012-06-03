@@ -43,7 +43,12 @@
   (spit file big-data))
 (defn read-from-file [file] (load-file file))
 
-(defn -main [[file & other]]
+(use '(incanter core charts stats))
+
+(defn -main [&args]
+    (view (histogram (sample-normal 1000))))
+
+(defn main [[file & other]]
   (let [db (init-db (slurp file))
         big-data (iterate-history-entries-with db)]
     (do (println (time/local-now))
