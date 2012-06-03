@@ -3,19 +3,15 @@
             [clojure.java.io :as io]
             [clj-time.local :as time]))
 
-;;Reading settings
-(defn add-row-to-pair [parameters row]
-  (let [pair (.split row "=")
-        key (keyword (first pair))
-        value (second pair)]
-    (assoc parameters key value)))
+;;Reading MySQL settings
+(def mysql-settings {:classname "com.mysql.jdbc.Driver" :subprotocol "mysql"})
 
-(defn init-parameters-from [settings]
-  (let [mysql-file (slurp (nth settings 0))
-        mysql-strings (.split mysql-file "\n")]
-    {:mysql-settings (reduce add-row-to-pair
-                             {:classname "com.mysql.jdbc.Driver" :subprotocol "mysql"}
-                             mysql-strings)}))
+(defn add-row [parameters row]
+  (let [pair (.split row "=")]
+    (assoc parameters (keyword (first pair)) (second pair))))
+
+(defn init-db [file]
+  (reduce add-row mysql-settings (.split file "\n")))
 
 ;;Counting size
 (def known-entry-size-bytes 10)
@@ -27,26 +23,27 @@
 
 (defn conjoin [coll entry]
   (let [key (select-keys entry [:type :user_space_id])
-        d (println key)
         size (count-entry-size entry)
         update #(+ size (if (nil? %) 0 %))]
     (update-in coll [key] update)))
 
+(defn reduce-sql-results [results] (reduce conjoin (hash-map) results))
+
 ;;Database functions
 (def sql-query "SELECT id, type, user_space_id, state, context from history limit 1000")
+
 (defn iterate-history-entries-with [db]
   (sql/with-connection db
     (sql/with-query-results results [sql-query]
       {:fetch-size 1000}
-      (reduce conjoin (hash-map) results))))
+      (reduce-sql-results results))))
 
 ;;Printing
 (defn dump-to-file [big-data]
   (println big-data))
 
-(defn -main [& args]
-  (let [parameters (init-parameters-from args)
-        db (parameters :mysql-settings)
+(defn -main [[file & other]]
+  (let [db (init-db (slurp file))
         big-data (iterate-history-entries-with db)]
     (do (println (time/local-now))
         (println "MySQL connection parameters: " db)
