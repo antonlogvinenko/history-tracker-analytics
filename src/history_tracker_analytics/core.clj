@@ -20,20 +20,16 @@
 ;;Counting size
 (def known-entry-size-bytes 10)
 
-(defn count-bytes [text]
-  (* 2 (count text)))
-
 (defn count-entry-size [{context :context state :state}]
-  (+ (count-bytes context)
-     (count-bytes state)
+  (+ (* 2 (count context))
+     (* 2 (count state))
      known-entry-size-bytes))
 
 (defn conjoin [coll entry]
   (let [key (select-keys entry [:type :user_space_id])
-        size (count-entry-size entry)]
-    (if (contains? coll key)
-      (update-in coll [key] + size)
-      (assoc coll key size))))
+        size (count-entry-size entry)
+        update #(+ size (if (nil? %1) 0 size))]
+    (update-in coll [key] update)))
 
 ;;Database functions
 (def sql-query "SELECT id, type, user_space_id, state, context from history limit 1000")

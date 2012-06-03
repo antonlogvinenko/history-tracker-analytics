@@ -2,10 +2,16 @@
   (:use [history-tracker-analytics.core])
   (:use [clojure.test]))
 
-;;clojure test-is: is, are, testing
+;;clojure test-is: is, are, testing, stubbing
 
 ;;Reading settings
-(defn add-row-to-pair-test)
+(deftest add-row-to-pair-test
+  (are [old-pair row new-pair] (= new-pair (add-row-to-pair old-pair row))
+       {} "ab" {:ab nil}
+       {} "b=a" {:b "a"}
+       {:c "d"} "a=b" {:c "d" :a "b"}
+       {:c "d"} "asdas" {:c "d" :asdas nil}
+       {:r "7"} "r=9" {:r "9"}))
 
 (defn init-parameters-from-test)
 
@@ -15,11 +21,6 @@
   (is (=
        (count-entry-size {:context "cake" :state "is a lie"})
        (+ known-entry-size-bytes (* 2 12)))))
-
-(deftest count-bytes-test
-  (is (=
-       (count-bytes "cake")
-       (* 2 4))))
 
 (deftest conjoin-test)
 
