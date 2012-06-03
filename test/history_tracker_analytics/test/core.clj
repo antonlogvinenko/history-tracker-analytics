@@ -40,8 +40,8 @@
         sql-row-2 {:type "bulletin" :user_space_id 1 :context "abc" :state "defgh"}
         sql-row-3 {:type "auction" :user_space_id 1 :context "abcdefgh" :state "ijklmno"}
         results [sql-row-1 sql-row-2 sql-row-3]
-        reduced-value {{:type "bulletin" :user_space_id 1} 48
-                       {:type "auction" :user_space_id 1} 40}]
+        reduced-value {{:type "bulletin" :user_space_id 1} (+ 28 (* 2 known-entry-size-bytes))
+                       {:type "auction" :user_space_id 1} (+ 30 known-entry-size-bytes)}]
        (is (= reduced-value (reduce-sql-results results)))))
 
 ;;Database functions - moved out everything possible, still dunno how to test it
