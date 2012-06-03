@@ -45,7 +45,7 @@
 
 (use '(incanter core charts stats))
 
-(defn -main [&args]
+(defn -main [& args]
     (view (histogram (sample-normal 1000))))
 
 (defn main [[file & other]]
