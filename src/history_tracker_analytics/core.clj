@@ -38,6 +38,8 @@
 (def sql-query "SELECT id, type, user_space_id, state, context from history")
 
 
+;;I've written this and I hope I'm ok with that
+;;processing 90billion entries forces me to make workaround for buggy mysql driver to use 'cursor'
 (defn iterate-history-entries-with [db]
   (do (Class/forName (db :classname))
       (let [conn (java.sql.DriverManager/getConnection
