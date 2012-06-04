@@ -1,10 +1,13 @@
 (ns history-tracker-analytics.core
   (:require [clojure.contrib.sql :as sql]
+            [clojureql.core :as ql]
             [clojure.java.io :as io]
             [clj-time.local :as time]))
 
 ;;Reading MySQL settings
-(def mysql-settings {:classname "com.mysql.jdbc.Driver" :subprotocol "mysql"})
+(def mysql-settings {:classname "com.mysql.jdbc.Driver" :subprotocol "mysql"
+                     :fetch-size 1000 :auto-commit true :use-unicode true
+                     :character-encoding "UTF-8"})
 
 (defn add-row [parameters row]
   (let [pair (.split row "=")]
@@ -22,24 +25,38 @@
      (* 2 (count state))
      known-entry-size-bytes))
 
+(def print-freq 10000)
 (defn conjoin [coll entry]
   (let [id (entry :id)
         key (select-keys entry [:type :user_space_id])
         size (count-entry-size entry)
         update #(+ size (if (nil? %) 0 %))]
-    (do (if (= (mod id 10000) 0) (println id))
+    (do (if (= (mod id print-freq) 0) (println id))
         (update-in coll [key] update))))
 
-(defn reduce-sql-results [results] (reduce conjoin (hash-map) results))
-
 ;;Database functions
-(def sql-query "SELECT id, type, user_space_id, state, context from history limit 500000")
+(def sql-query "SELECT id, type, user_space_id, state, context from history limit 100000")
+
 
 (defn iterate-history-entries-with [db]
-  (sql/with-connection db
-    (sql/with-query-results results [sql-query]
-      {:fetch-size 1000}
-      (reduce-sql-results results))))
+  (do (Class/forName (db :classname))
+      (let [conn (java.sql.DriverManager/getConnection
+                                 (str "jdbc:" (db :subprotocol) ":" (db :subname))
+                                 (db :user) (db :password))
+            stmt (.createStatement conn)]
+        (do (.setFetchDirection stmt java.sql.ResultSet/FETCH_FORWARD)
+            (.setFetchSize stmt Integer/MIN_VALUE)
+            (let [result-set (.executeQuery stmt sql-query)
+                  empty-coll (hash-map)]
+              (loop [result result-set coll empty-coll]
+                (if (.next result)
+                  (let [result-hash {:id (.getInt result "id")
+                                     :type (.getString result "type")
+                                     :user_space_id (.getInt result "user_space_id")
+                                     :context (.getString result "context")
+                                     :state (.getString result "state")}]
+                    (recur result (conjoin coll result-hash)))
+                  coll)))))))
 
 ;;Printing - not that i'll use these dummy wrappy functions, just not to foget how to print/read
 (defn read-from-file [file] (load-file file))
@@ -49,10 +66,11 @@
 ;  (view (histogram (sample-normal 1000))))
 
 (defn -main [file & other]
-  (let [d (println file)
-        db (init-db (slurp file))
-        big-data (iterate-history-entries-with db)]
-    (do (println (time/local-now))
+  (let [db (init-db (slurp file))
+        start-time (time/local-now)
+        big-data (iterate-history-entries-with db)
+        end-time (time/local-now)]
+    (do (println start-time)
         (println "MySQL connection parameters: " db)
         (spit "stats.raw" big-data)
-        (println (time/local-now)))))
+        (println end-time))))

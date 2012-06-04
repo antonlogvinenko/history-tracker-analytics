@@ -6,6 +6,7 @@
                  [mysql/mysql-connector-java "5.1.6"]
                  [clj-time "0.4.2"]
                  [incanter "1.3.0"]
+                 [clojureql "1.0.3"]
                  ]
   :source-paths ["src/"]
   :main history-tracker-analytics.core)
