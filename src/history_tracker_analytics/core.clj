@@ -35,7 +35,7 @@
         (update-in coll [key] update))))
 
 ;;Database functions
-(def sql-query "SELECT id, type, user_space_id, state, context from history limit")
+(def sql-query "SELECT id, type, user_space_id, state, context from history")
 
 
 (defn iterate-history-entries-with [db]
