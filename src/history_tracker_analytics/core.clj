@@ -55,12 +55,8 @@
                     (recur result (conjoin coll result-hash)))
                   coll)))))))
 
-;;Printing - not that i'll use these dummy wrappy functions, just not to foget how to print/read
-(defn read-from-file [file] (load-file file))
-
-;(use '(incanter core charts stats))
-;(defn -main [& args]
-;  (view (histogram (sample-normal 1000))))
+(def statistics-file-name "statistics")
+(def distribution-file-name "distribution")
 
 (defn collect-stats [[file & other]]
   (let [db (init-db (slurp file))
@@ -69,18 +65,45 @@
         end-time (time/local-now)]
     (do (println start-time)
         (println "MySQL connection parameters: " db)
-        (spit "stats.raw" big-data)
+        (spit statistics-file-name (vals big-data))
         (println end-time))))
 
-(defn build [distr]
-  )
+(defn get-distribution-reduce [step]
+  (fn [distribution item]
+    (let [group (quot item step)
+          group-amount (get distribution group 0)]
+      (assoc distribution group (inc group-amount)))))
 
-(defn draw [file]
-  )
+(defn get-distribution [statistics step]
+  (let [reduce-f (get-distribution-reduce step)]
+        (reduce reduce-f {} statistics)))
 
-(defn info [] (println "Usage:\n1. collect <ini-file>\n2. build distr\n3. draw distr"))
+(defn build [[step & other]]
+  (let [statistics (load-file statistics-file-name)
+        distribution (get-distribution statistics step)]
+    (spit (str distribution-file-name "-" step ) distribution)))
+
+(defn add-time [x] x)
+(use '(incanter core charts stats))
+(defn draw [[file & other]]
+  (let [distribution (load-file file)
+        step (Integer/parseInt (second (.split file "-")))
+        distribution-time (add-time distribution)]
+    (do (view (histogram (sample-normal 1000)))
+        (view (histogram (sample-normal 1000))))))
+
+(defn info []
+  (do
+    (println "Usage:")
+    (println "1. collect <ini-file> - creates 'statistics' file")
+    (println "2. build <distr> - creates distribution files")
+    (println "3. draw <distr> - draws time and capacity distribution files")))
 
 (defn -main [& other]
+      (do (view (histogram (sample-normal 1000)))
+        (view (histogram (sample-normal 1000)))))
+
+(defn main [& other]
   (if (= 0 (count other))
     (info)
     (let [mode (first other)
