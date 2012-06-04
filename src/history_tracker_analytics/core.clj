@@ -1,6 +1,5 @@
 (ns history-tracker-analytics.core
   (:require [clojure.contrib.sql :as sql]
-            [clojureql.core :as ql]
             [clojure.java.io :as io]
             [clj-time.local :as time]))
 
@@ -37,7 +36,6 @@
 ;;Database functions
 (def sql-query "SELECT id, type, user_space_id, state, context from history")
 
-
 ;;I've written this and I hope I'm ok with that
 ;;processing 90billion entries forces me to make workaround for buggy mysql driver to use 'cursor'
 (defn iterate-history-entries-with [db]
@@ -58,7 +56,6 @@
                                      :state (.getString result "state")}]
                     (recur result (conjoin coll result-hash)))
                   coll)))))))
-
 
 (defn collect-stats [[file & other]]
   (let [db (init-db (slurp file))

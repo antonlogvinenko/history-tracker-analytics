@@ -14,3 +14,8 @@ amount -> precentile
 
 - make namespaces, too much code
 - place sample 'statistics' and distribution-n files under git
+
+
+Features
+========
+- extract both entry capacity and amount statistics, build correlation plot
