@@ -17,13 +17,15 @@
 ;;Counting size
 ;;omfg constant entry size turned to be 42!!!
 (def known-entry-size-bytes 42)
+(def statistics-file-name "statistics")
+(def distribution-file-name "distribution")
+(def print-freq 100000)
 
 (defn count-entry-size [{context :context state :state}]
   (+ (* 2 (count context))
      (* 2 (count state))
      known-entry-size-bytes))
 
-(def print-freq 100000)
 (defn conjoin [coll entry]
   (let [id (entry :id)
         key (.hashCode (select-keys entry [:type :user_space_id]))
@@ -55,8 +57,6 @@
                     (recur result (conjoin coll result-hash)))
                   coll)))))))
 
-(def statistics-file-name "statistics")
-(def distribution-file-name "distribution")
 
 (defn collect-stats [[file & other]]
   (let [db (init-db (slurp file))
@@ -68,47 +68,36 @@
         (spit statistics-file-name (vals big-data))
         (println end-time))))
 
-(defn get-distribution-reduce [step]
-  (fn [distribution item]
-    (let [group (quot item step)
-          group-amount (get distribution group 0)]
-      (assoc distribution group (inc group-amount)))))
+(defn calc [statistics-file-name])
 
-(defn get-distribution [statistics step]
-  (let [reduce-f (get-distribution-reduce step)]
-        (reduce reduce-f {} statistics)))
+(defn capacity-to-time [capacity] (* 21 capacity))
+(defn add-time [distribution] (map capacity-to-time distribution))
 
-(defn build [[step & other]]
-  (let [statistics (load-file statistics-file-name)
-        distribution (get-distribution statistics step)]
-    (spit (str distribution-file-name "-" step ) distribution)))
-
-(defn add-time [x] x)
 (use '(incanter core charts stats))
-(defn draw [[file & other]]
-  (let [distribution (load-file file)
-        step (Integer/parseInt (second (.split file "-")))
-        distribution-time (add-time distribution)]
-    (do (view (histogram (sample-normal 1000)))
-        (view (histogram (sample-normal 1000))))))
+
+(defn draw [file]
+  (let [capacity-distribution (load-file file)
+        time-distribution (add-time capacity-distribution)]
+    (do (view (histogram capacity-distribution
+                         :theme :dark
+                         :x-label "entry capacity, bytes"))
+        (view (histogram time-distribution
+                         :theme :dark
+                         :x-label "entry processing time, seconds" )))))
 
 (defn info []
   (do
     (println "Usage:")
     (println "1. collect <ini-file> - creates 'statistics' file")
-    (println "2. build <distr> - creates distribution files")
-    (println "3. draw <distr> - draws time and capacity distribution files")))
+    (println "2. draw - draws statistics")
+    (println "3. precentile <statistics> - ?")))
 
 (defn -main [& other]
-      (do (view (histogram (sample-normal 1000)))
-        (view (histogram (sample-normal 1000)))))
-
-(defn main [& other]
   (if (= 0 (count other))
     (info)
     (let [mode (first other)
           args (rest other)]
       (cond (= mode "collect") (collect-stats args)
-            (= mode "build") (build args)
-            (= mode "draw") (draw args)
+            (= mode "draw") (draw statistics-file-name)
+            (= mode "calc") (calc statistics-file-name)
             :else (info)))))

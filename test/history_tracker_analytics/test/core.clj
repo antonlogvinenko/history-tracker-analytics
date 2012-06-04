@@ -35,6 +35,7 @@
            {(.hashCode {:type "bulletin" :user_space_id 11}) (+ 31 known-entry-size-bytes)}
            ))))
 
+
 ;;Database functions - moved out everything possible, still dunno how to test it
 ;;will require mocking and stubbing
 (deftest iterate-history-entries-with-test)
