@@ -5,9 +5,7 @@
             [clj-time.local :as time]))
 
 ;;Reading MySQL settings
-(def mysql-settings {:classname "com.mysql.jdbc.Driver" :subprotocol "mysql"
-                     :fetch-size 1000 :auto-commit true :use-unicode true
-                     :character-encoding "UTF-8"})
+(def mysql-settings {:classname "com.mysql.jdbc.Driver" :subprotocol "mysql"})
 
 (defn add-row [parameters row]
   (let [pair (.split row "=")]
