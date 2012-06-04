@@ -29,20 +29,11 @@
     (let [entry {:id 8 :type "bulletin" :user_space_id 11 :context "cake" :state "is a lie"}]
       (are [coll entry new-coll] (= new-coll (conjoin coll entry))
            {} entry
-           {{:type "bulletin" :user_space_id 11} (+ 24 known-entry-size-bytes)}
+           {(.hashCode {:type "bulletin" :user_space_id 11}) (+ 24 known-entry-size-bytes)}
 
-           {{:type "bulletin" :user_space_id 11} 7} entry
-           {{:type "bulletin" :user_space_id 11} (+ 31 known-entry-size-bytes)}
+           {(.hashCode {:type "bulletin" :user_space_id 11}) 7} entry
+           {(.hashCode {:type "bulletin" :user_space_id 11}) (+ 31 known-entry-size-bytes)}
            ))))
-
-(deftest reduce-sql-results-test
-  (let [sql-row-1 {:id 88 :type "bulletin" :user_space_id 1 :context "abc" :state "def"}
-        sql-row-2 {:id 88 :type "bulletin" :user_space_id 1 :context "abc" :state "defgh"}
-        sql-row-3 {:id 88 :type "auction" :user_space_id 1 :context "abcdefgh" :state "ijklmno"}
-        results [sql-row-1 sql-row-2 sql-row-3]
-        reduced-value {{:type "bulletin" :user_space_id 1} (+ 28 (* 2 known-entry-size-bytes))
-                       {:type "auction" :user_space_id 1} (+ 30 known-entry-size-bytes)}]
-       (is (= reduced-value (reduce-sql-results results)))))
 
 ;;Database functions - moved out everything possible, still dunno how to test it
 ;;will require mocking and stubbing
