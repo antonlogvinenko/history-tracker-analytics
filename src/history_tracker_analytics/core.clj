@@ -35,7 +35,7 @@
         (update-in coll [key] update))))
 
 ;;Database functions
-(def sql-query "SELECT id, type, user_space_id, state, context from history limit 100000")
+(def sql-query "SELECT id, type, user_space_id, state, context from history limit")
 
 
 (defn iterate-history-entries-with [db]
@@ -62,7 +62,7 @@
 (defn read-from-file [file] (load-file file))
 
 ;(use '(incanter core charts stats))
-;(defn main [& args]
+;(defn -main [& args]
 ;  (view (histogram (sample-normal 1000))))
 
 (defn -main [file & other]
