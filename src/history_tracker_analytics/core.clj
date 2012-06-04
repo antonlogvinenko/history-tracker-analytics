@@ -29,7 +29,7 @@
         key (.hashCode (select-keys entry [:type :user_space_id]))
         size (count-entry-size entry)
         update #(+ size (if (nil? %) 0 %))]
-    (do (if (= (mod id print-freq) 0) (println id (count coll)))
+    (do (if (= (mod id print-freq) 0) (println id (count coll) (time/local-now)))
         (update-in coll [key] update))))
 
 ;;Database functions
