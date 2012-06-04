@@ -15,7 +15,7 @@
 
 ;;Counting size
 ;;omfg constant entry size turned to be 42!!!
-(def known-entry-size-bytes 42)
+(def known-entry-size-bytes 17)
 (def statistics-file-name "statistics")
 (def distribution-file-name "distribution")
 (def print-freq 100000)
