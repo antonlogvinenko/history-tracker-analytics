@@ -46,9 +46,8 @@
             stmt (.createStatement conn)]
         (do (.setFetchDirection stmt java.sql.ResultSet/FETCH_FORWARD)
             (.setFetchSize stmt Integer/MIN_VALUE)
-            (let [result-set (.executeQuery stmt sql-query)
-                  empty-coll (hash-map)]
-              (loop [result result-set coll empty-coll]
+            (let [result-set (.executeQuery stmt sql-query)]
+              (loop [result result-set coll (hash-map)]
                 (if (.next result)
                   (let [result-hash {:id (.getInt result "id")
                                      :type (.getString result "type")

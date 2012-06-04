@@ -9,4 +9,5 @@
                  [clojureql "1.0.3"]
                  ]
   :source-paths ["src/"]
+  :jvm-opts ["-Xms1024M", "-Xmx2048M", "-Xmn1536M"]
   :main history-tracker-analytics.core)
