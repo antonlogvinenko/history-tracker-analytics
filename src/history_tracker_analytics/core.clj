@@ -28,10 +28,10 @@
 (def print-freq 100000)
 (defn conjoin [coll entry]
   (let [id (entry :id)
-        key (select-keys entry [:type :user_space_id])
+        key (.hashCode (select-keys entry [:type :user_space_id]))
         size (count-entry-size entry)
         update #(+ size (if (nil? %) 0 %))]
-    (do (if (= (mod id print-freq) 0) (println id))
+    (do (if (= (mod id print-freq) 0) (println id ", " (count coll)))
         (update-in coll [key] update))))
 
 ;;Database functions
