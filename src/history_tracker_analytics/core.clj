@@ -62,7 +62,7 @@
 ;(defn -main [& args]
 ;  (view (histogram (sample-normal 1000))))
 
-(defn -main [file & other]
+(defn collect-stats [[file & other]]
   (let [db (init-db (slurp file))
         start-time (time/local-now)
         big-data (iterate-history-entries-with db)
@@ -71,3 +71,21 @@
         (println "MySQL connection parameters: " db)
         (spit "stats.raw" big-data)
         (println end-time))))
+
+(defn build [distr]
+  )
+
+(defn draw [file]
+  )
+
+(defn info [] (println "Usage:\n1. collect <ini-file>\n2. build distr\n3. draw distr"))
+
+(defn -main [& other]
+  (if (= 0 (count other))
+    (info)
+    (let [mode (first other)
+          args (rest other)]
+      (cond (= mode "collect") (collect-stats args)
+            (= mode "build") (build args)
+            (= mode "draw") (draw args)
+            :else (info)))))
