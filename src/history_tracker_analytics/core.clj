@@ -25,7 +25,7 @@
      (* 2 (count state))
      known-entry-size-bytes))
 
-(def print-freq 10000)
+(def print-freq 100000)
 (defn conjoin [coll entry]
   (let [id (entry :id)
         key (select-keys entry [:type :user_space_id])
