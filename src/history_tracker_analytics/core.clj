@@ -1,7 +1,9 @@
 (ns history-tracker-analytics.core
   (:require [clojure.contrib.sql :as sql]
             [clojure.java.io :as io]
-            [clj-time.local :as time]))
+            [clj-time.local :as time]
+            [clojure.contrib.generic.math-functions :as math]
+            [clojure.contrib.string :as string]))
 
 ;;Reading MySQL settings
 (def mysql-settings {:classname "com.mysql.jdbc.Driver" :subprotocol "mysql"})
@@ -13,8 +15,9 @@
 (defn init-db [file]
   (reduce add-row mysql-settings (.split file "\n")))
 
+
+
 ;;Counting size
-;;omfg constant entry size turned to be 42!!!
 (def known-entry-size-bytes 17)
 (def statistics-file-name "statistics")
 (def distribution-file-name "distribution")
@@ -33,11 +36,12 @@
     (do (if (= (mod id print-freq) 0) (println id (count coll) (time/local-now)))
         (update-in coll [key] update))))
 
+
+
 ;;Database functions
 (def sql-query "SELECT id, type, user_space_id, state, context from history")
 
-;;I've written this and I hope I'm ok with that
-;;processing 90billion entries forces me to make workaround for buggy mysql driver to use 'cursor'
+;;buggy mysql jdbc driver here, rewrote standard clojure
 (defn iterate-history-entries-with [db]
   (do (Class/forName (db :classname))
       (let [conn (java.sql.DriverManager/getConnection
@@ -67,29 +71,53 @@
         (spit statistics-file-name (vals big-data))
         (println end-time))))
 
-(defn calc [statistics-file-name])
 
 (defn capacity-to-time [capacity] (* 21 capacity))
-(defn add-time [distribution] (map capacity-to-time distribution))
+(defn time-to-capacity [time] (/ time 21))
+(defn add-time [statistics] (map capacity-to-time statistics))
+
+(defn by-percentile [statistics [percentile & other]]
+  (let [length (count statistics)
+        percent (/ percentile 100)
+        maximum-capacity (math/floor (* length percent))
+        maximum-time (add-time maximum-capacity)]
+    {:maximum-capacity maximum-capacity
+     :maximum-time maximum-time}))
+
+(defn by-value [statistics value]
+  (let [amount (count statistics)
+        less-than-value (last (first (split-with #(<= % value))))]
+    (/ less-than-value amount)))
+
+(defn by-capacity [statistics [c & other]]
+  {:related-time (capacity-to-time c)
+   :percentile (by-value statistics c)})
+
+(defn by-time [statistics [t & other]]
+  {:related-capacity (time-to-capacity t)
+   :percentile (by-value (add-time statistics))})
 
 (use '(incanter core charts stats))
 
-(defn draw [file]
-  (let [capacity-distribution (load-file file)
-        time-distribution (add-time capacity-distribution)]
-    (do (view (histogram capacity-distribution
-                         :theme :dark
-                         :x-label "entry capacity, bytes"))
-        (view (histogram time-distribution
-                         :theme :dark
-                         :x-label "entry processing time, seconds" )))))
-
+(defn draw [statistics]
+  (let [statistics (take 9000000 statistics)]
+    (do (view (histogram statistics
+                         :theme :dark :x-label)))))
 (defn info []
   (do
     (println "Usage:")
     (println "1. collect <ini-file> - creates 'statistics' file")
     (println "2. draw - draws statistics")
-    (println "3. precentile <statistics> - ?")))
+    (println "3. percentile <value>")
+    (println "4. capacity <value>")
+    (println "5. time <value>")))
+
+
+(defn read-statistics [statistics-file-name]
+  (let [text (string/chop (slurp statistics-file-name))
+        strings (.split text " ")]
+    (map #(Integer/parseInt %) strings)))
+
 
 (defn -main [& other]
   (if (= 0 (count other))
@@ -97,6 +125,9 @@
     (let [mode (first other)
           args (rest other)]
       (cond (= mode "collect") (collect-stats args)
-            (= mode "draw") (draw statistics-file-name)
-            (= mode "calc") (calc statistics-file-name)
-            :else (info)))))
+            :else (let [statistics (read-statistics statistics-file-name)]
+                    (cond (= mode "draw") (draw statistics)
+                          (= mode "percentile") (println (by-percentile statistics other))
+                          (= mode "capacity") (println (by-capacity statistics other))
+                          (= mode "time") (println (by-time statistics other))
+                          :else (info)))))))

@@ -35,6 +35,13 @@
            {(.hashCode {:type "bulletin" :user_space_id 11}) (+ 31 known-entry-size-bytes)}
            ))))
 
+(deftest by-precentile)
+
+(deftest by-value)
+
+(deftest by-capacity)
+
+(deftest by-time)
 
 ;;Database functions - moved out everything possible, still dunno how to test it
 ;;will require mocking and stubbing
