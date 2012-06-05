@@ -76,26 +76,27 @@
 (defn time-to-capacity [time] (/ time 21))
 (defn add-time [statistics] (map capacity-to-time statistics))
 
-(defn by-percentile [statistics [percentile & other]]
+(defn by-percentile [statistics percentile]
   (let [length (count statistics)
         percent (/ percentile 100)
-        maximum-capacity (math/floor (* length percent))
-        maximum-time (add-time maximum-capacity)]
+        index (int (* length percent))
+        maximum-capacity (nth statistics index)
+        maximum-time (capacity-to-time maximum-capacity)]
     {:maximum-capacity maximum-capacity
      :maximum-time maximum-time}))
 
 (defn by-value [statistics value]
   (let [amount (count statistics)
-        less-than-value (last (first (split-with #(<= % value))))]
-    (/ less-than-value amount)))
+        less-than-or-equal-list (first (split-with #(<= % value) statistics))
+        less-than-count (count less-than-or-equal-list)]
+    (double (/ less-than-count amount))))
 
-(defn by-capacity [statistics [c & other]]
+(defn by-capacity [statistics c]
   {:related-time (capacity-to-time c)
-   :percentile (by-value statistics c)})
+   :percentile (double (by-value statistics c))})
 
-(defn by-time [statistics [t & other]]
-  {:related-capacity (time-to-capacity t)
-   :percentile (by-value (add-time statistics))})
+(defn by-time [statistics t]
+  {:percentile (double (by-value (add-time statistics)))})
 
 (use '(incanter core charts stats))
 
@@ -125,9 +126,10 @@
     (let [mode (first other)
           args (rest other)]
       (cond (= mode "collect") (collect-stats args)
-            :else (let [statistics (read-statistics statistics-file-name)]
+            :else (let [statistics (read-statistics statistics-file-name)
+                        argument (Double/parseDouble (first args))]
                     (cond (= mode "draw") (draw statistics)
-                          (= mode "percentile") (println (by-percentile statistics other))
-                          (= mode "capacity") (println (by-capacity statistics other))
-                          (= mode "time") (println (by-time statistics other))
+                          (= mode "percentile") (println (by-percentile statistics argument))
+                          (= mode "capacity") (println (by-capacity statistics argument))
+                          (= mode "time") (println (by-time statistics argument))
                           :else (info)))))))

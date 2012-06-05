@@ -35,13 +35,19 @@
            {(.hashCode {:type "bulletin" :user_space_id 11}) (+ 31 known-entry-size-bytes)}
            ))))
 
-(deftest by-precentile)
+(deftest by-percentile-test
+  (are [stats p resulting] (= resulting (by-percentile stats p))
+       (take 100 (iterate #(+ % 2) 1))
+       99
+       {:maximum-capacity 199
+        :maximum-time (capacity-to-time 199)}))
 
-(deftest by-value)
+(deftest by-value-test
+  (are [stats v resulting] (= resulting (by-value stats v))
+       (take 100 (iterate #(+ % 2) 1))
+       78
+       39/100))
 
-(deftest by-capacity)
-
-(deftest by-time)
 
 ;;Database functions - moved out everything possible, still dunno how to test it
 ;;will require mocking and stubbing
