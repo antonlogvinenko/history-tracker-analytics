@@ -7,6 +7,7 @@
                  [clj-time "0.4.2"]
                  [incanter "1.3.0"]
                  [clojureql "1.0.3"]
+                 [clj-stacktrace "0.2.4"]
                  ]
   :source-paths ["src/"]
   :jvm-opts ["-Xms1024M" "-Xmx2048M" "-Xmn512M" "-server"]

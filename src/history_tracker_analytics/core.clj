@@ -41,7 +41,7 @@
 ;;Database functions
 (def sql-query "SELECT id, type, user_space_id, state, context from history")
 
-;;buggy mysql jdbc driver here, rewrote standard clojure
+;;buggy mysql jdbc driver here, rewrote standard clojure wrapper library
 (defn iterate-history-entries-with [db]
   (do (Class/forName (db :classname))
       (let [conn (java.sql.DriverManager/getConnection
@@ -119,6 +119,20 @@
         strings (.split text " ")]
     (map #(Integer/parseInt %) strings)))
 
+;;http://clj-me.blogspot.com/2009/06/linear-interpolation-and-sorted-map.html
+;;thanks to Christofer Grand
+(defn create-linear-interpolation
+  "Takes a coll of 2D points (vectors) and returns
+  their linear interpolation function."
+  [points]
+  (let [m (into (sorted-map) points)]
+    (fn [x]
+      (let [[[x1 y1]] (rsubseq m <= x)
+            [[x2 y2]] (subseq m > x)]
+        (cond
+         (not x2) y1
+         (not x1) y2
+         :else (+ y1 (* (- x x1) (/ (- y2 y1) (- x2 x1))))))))
 
 (defn -main [& other]
   (if (= 0 (count other))
