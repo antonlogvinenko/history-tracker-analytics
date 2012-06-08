@@ -4,6 +4,8 @@
 
 ;;clojure test-is: is, are, testing, stubbing
 
+(def test run-tests)
+
 ;;Reading settings
 (deftest add-row-test
   (are [old-pair row new-pair] (= new-pair (add-row old-pair row))

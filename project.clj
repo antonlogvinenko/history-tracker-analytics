@@ -1,6 +1,7 @@
 (defproject history-tracker-analytics "1.0.0-SNAPSHOT"
   :description "FIXME: write description"
   :dependencies [
+                 [lein-swank "1.4.4"]
                  [org.clojure/clojure "1.2.1"]
                  [org.clojure/clojure-contrib "1.2.0"]
                  [mysql/mysql-connector-java "5.1.6"]

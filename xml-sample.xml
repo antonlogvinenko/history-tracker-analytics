@@ -1,0 +1,9 @@
+<objectState xmlns='http://farpost.com/history/schema' revision='XYZ' time='2010-02-24T12:58:11+10:00'>
+  <object type='bulletin' id='6295407'/>
+  <state>
+    <attributes><attribute name="attributesConverted" type="integer" value="2"/><attribute name="bulletin.subject" type="string" value="CD чейнджер"/><attribute name="auto.firmId" type="string" value="5"/><attribute name="bulletin.expireDate" type="datetime" value="2010-05-10T12:43:50+11:00"/><attribute name="image2" type="string">http://static.baza.farpost.ru/bulletins_images/5/7/6/5764851.jpg 150x62</attribute><attribute name="bulletin.paymentStatus" type="string" value="notPayed"/><attribute name="image1" type="string">http://static.baza.farpost.ru/bulletins_images/5/7/6/5764848.jpg 640x189</attribute><attribute name="sell.price" type="float" value="5500.0"/><attribute name="auto.countryId" type="string" value="1"/><attribute name="bulletin.dateSort" type="datetime" value="2010-04-10T12:43:50+11:00"/><attribute name="bulletin.moderationStatus" type="integer" value="0"/><attribute name="bulletin.contactInfo" type="string" value="+7 924 319-56-01"/><attribute name="auto.modelId" type="integer" value="0"/><attribute name="sell.currency" type="string" value="rur"/><attribute name="bulletin.text" type="string">Продам CD CHANGER на 6 дисков, модель MZ594706. возможен торг.</attribute></attributes>    
+  </state>
+  <context>
+    <attributes><attribute name="url" type="string" value="/reindex"/></attributes>
+  </context>
+</objectState>
