@@ -95,6 +95,10 @@
   {:related-time (capacity-to-time c)
    :percentile (double (by-value statistics c))})
 
+
+      
+  
+
 (defn by-time [statistics t]
   {:percentile (double (by-value (add-time statistics)))})
 
@@ -132,7 +136,7 @@
         (cond
          (not x2) y1
          (not x1) y2
-         :else (+ y1 (* (- x x1) (/ (- y2 y1) (- x2 x1))))))))
+         :else (+ y1 (* (- x x1) (/ (- y2 y1) (- x2 x1)))))))))
 
 (defn -main [& other]
   (if (= 0 (count other))
