@@ -5,14 +5,15 @@
 (defn time-to-capacity [time] (/ time 21))
 (defn add-time [statistics] (map capacity-to-time statistics))
 
-(defn by-percentile [statistics percentile]
-  (let [length (count statistics)
+(defn by-percentile [statistics percentile table-function-file-name]
+  (let [{capacity-to-time :capacity-to-time} (load-approximations table-function-file-name)
+        length (count statistics)
         percent (/ percentile 100)
         index (int (* length percent))
         maximum-capacity (nth statistics index)
         maximum-time (capacity-to-time maximum-capacity)]
     {:maximum-capacity maximum-capacity
-     :maximum-time maximum-time}))
+     :maximum-time (double maximum-time)}))
 
 (defn by-value [statistics value]
   (let [amount (count statistics)
@@ -20,13 +21,14 @@
         less-than-count (count less-than-or-equal-list)]
     (double (/ less-than-count amount))))
 
-(defn by-capacity [statistics c]
-  {:related-time (capacity-to-time c)
-   :percentile (double (by-value statistics c))})
+(defn by-capacity [statistics c table-function-file-name]
+  (let [{capacity-to-time :capacity-to-time} (load-approximations table-function-file-name)]
+    {:related-time (capacity-to-time c)
+     :percentile (double (by-value statistics c))}))
 
-
-(defn by-time [statistics t]
-  {:percentile (double (by-value (add-time statistics)))})
+(defn by-time [statistics t table-function-file-name]
+  (let [{time-to-capacity :time-to-capacity} (load-approximations table-function-file-name)]
+        {:percentile (double (by-value (add-time statistics)))}))
 
 (use '(incanter core charts stats))
 
