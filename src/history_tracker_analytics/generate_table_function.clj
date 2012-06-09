@@ -56,11 +56,10 @@
 (defn parse-xml [xml]
   (let [root (get-root xml)
         object-states (get-object-states root)
-        length (. object-states getLength)
-        object-state (get-object-state (. object-states (item 0)))]
-    (map
+        length (. object-states getLength)]
+    (do (map
      #(get-object-state (. object-states (item %)))
-     (range 0 length))))
+     (range 0 length)))))
 
 (defn generate-xml-part [n text]
   (.replaceAll text "XYZ" (str n)))
@@ -73,18 +72,19 @@
 
 (defn measure [sample]
   (let [time-0 (. System currentTimeMillis)
-        root (get-root sample)
-        time-1 (. System currentTimeMillis)]
-    (- time-1 time-0)))
+        root (vec (parse-xml sample))]
+    (do (spit "very-temp.txt" root)
+        (- (. System currentTimeMillis) time-0))))
 
 (defn capacity-to-time-avg [length]
   (let [sample (generate-xml-string length)
-        repeat-count 10
+        repeat-count 5
         generating-time (loop [round 0 time 0]
                           (if (= round repeat-count) time
                               (recur (+ round 1) (+ time (measure sample)))))
         bytes (* 2 (count sample))]
-    [bytes (/ generating-time repeat-count)]))
+    (do (println "generated length" length)
+        [bytes (double (/ generating-time repeat-count))])))
 
 (defn generate-table-function [file-name max-size step]
   (let [versions (range 1 max-size step)

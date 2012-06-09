@@ -1,9 +1,28 @@
 (ns history-tracker-analytics.interpret
   (:use [clojure.contrib.string :as string :only (chop)]))
 
-(defn capacity-to-time [capacity] (* 21 capacity))
-(defn time-to-capacity [time] (/ time 21))
-(defn add-time [statistics] (map capacity-to-time statistics))
+(defn add-time [statistics capacity-to-time] (map capacity-to-time statistics))
+
+;;http://clj-me.blogspot.com/2009/06/linear-interpolation-and-sorted-map.html
+;;thanks to Christofer Grand
+(defn create-linear-interpolation
+  "Takes a coll of 2D points (vectors) and returns
+  their linear interpolation function."
+  [points]
+  (let [m (into (sorted-map) points)]
+    (fn [x]
+      (let [[[x1 y1]] (rsubseq m <= x)
+            [[x2 y2]] (subseq m > x)]
+        (cond
+         (not x2) y1
+         (not x1) y2
+         :else (+ y1 (* (- x x1) (/ (- y2 y1) (- x2 x1)))))))))
+
+(defn load-approximations [table-function-file-name]
+  (let [data (load-file table-function-file-name)
+        reversed-data (map #(vec (reverse %)) data)]
+    {:capacity-to-time (create-linear-interpolation data)
+     :time-to-capacity (create-linear-interpolation reversed-data)}))
 
 (defn by-percentile [statistics percentile table-function-file-name]
   (let [{capacity-to-time :capacity-to-time} (load-approximations table-function-file-name)
@@ -27,7 +46,8 @@
      :percentile (double (by-value statistics c))}))
 
 (defn by-time [statistics t table-function-file-name]
-  (let [{time-to-capacity :time-to-capacity} (load-approximations table-function-file-name)]
+  (let [{time-to-capacity :time-to-capacity
+         capacity-to-time :capacity-to-time} (load-approximations table-function-file-name)]
         {:percentile (double (by-value (add-time statistics)))}))
 
 (use '(incanter core charts stats))
@@ -43,24 +63,4 @@
         strings (.split text " ")]
     (map #(Integer/parseInt %) strings)))
 
-;;http://clj-me.blogspot.com/2009/06/linear-interpolation-and-sorted-map.html
-;;thanks to Christofer Grand
-(defn create-linear-interpolation
-  "Takes a coll of 2D points (vectors) and returns
-  their linear interpolation function."
-  [points]
-  (let [m (into (sorted-map) points)]
-    (fn [x]
-      (let [[[x1 y1]] (rsubseq m <= x)
-            [[x2 y2]] (subseq m > x)]
-        (cond
-         (not x2) y1
-         (not x1) y2
-         :else (+ y1 (* (- x x1) (/ (- y2 y1) (- x2 x1)))))))))
-(defn load-approximations [table-function-file-name]
-  (let [data (load-file table-function-file-name)
-        reversed-data (map #(vec (reverse %)) data)
-        a (println reversed-data)]
-    {:capacity-to-time (create-linear-interpolation data)
-     :time-to-capacity (create-linear-interpolation reversed-data)}))
 
