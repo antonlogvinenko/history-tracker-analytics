@@ -48,7 +48,7 @@
 (defn by-time [statistics t table-function-file-name]
   (let [{time-to-capacity :time-to-capacity
          capacity-to-time :capacity-to-time} (load-approximations table-function-file-name)]
-        {:percentile (double (by-value (add-time statistics)))}))
+        {:percentile (double (by-value (add-time statistics capacity-to-time)))}))
 
 (use '(incanter core charts stats))
 
