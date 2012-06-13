@@ -52,10 +52,14 @@
 
 (use '(incanter core charts stats))
 
+;;11500000 step 200000
 (defn draw [statistics]
-  (let [statistics (take 9000000 statistics)]
-    (do (view (histogram statistics
-                         :theme :dark :x-label)))))
+  (let [statistics statistics]
+    (do (println (count statistics))
+        (view (histogram (take 200000 (drop 11400000 statistics))
+                         :nbins 500
+                         :x-label "bulletin history size, bytes"
+                         :y-label "amount")))))
 
 
 (defn read-statistics [statistics-file-name]
