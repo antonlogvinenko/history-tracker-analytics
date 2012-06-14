@@ -1,6 +1,7 @@
 (ns history-tracker-analytics.collect
-    (:require [clojure.contrib.sql :as sql]
-              [clj-time.local :as time])
+  (:require [clojure.contrib.sql :as sql]
+            [clojure.contrib.seq :as seq]
+            [clj-time.local :as time])
     (:use [clojureql.core :only (table select where)]))
 
 ;;Reading MySQL settings
@@ -78,30 +79,48 @@
 (defn- get-object-null [next-id]
   (sql/with-query-results rs
     ["select user_space_id, type from history where id = ?" (next-id)] rs))
-(defn- get-object [next-id]
+(defn- fetch-object [next-id]
   (loop [next-id next-id]
     (let [object (get-object-null next-id)]
       (if (nil? object) (recur next-id)
           (let [object (nth object 0)]
             {:user-space-id (object :user_space_id)
              :type (object :type)})))))
+          
 
 ;;load entries
 ;;save entries
 ;;routine
 
-(defn- get-random-objects [amount]
-  (let [min-id (get-id-extreme min-sql)
-        max-id (get-id-extreme max-sql)
-        next-id #(+ (rand-int (+ max-id (- min-id) 1)) min-id)]
-    (loop [result #{}]
-      (if (= (count result) amount) result
-        (recur (conj result (get-object next-id)))))))
-        
-        
-(defn load-sample [amount]
-  (let [local-db (init-db (slurp local-mysql-config))
-        remote-db (init-db (slurp remote-mysql-config))]
-    (sql/with-connection remote-db
-      (time (get-random-objects amount)))))
+(defn- fetch-random-objects [db amount]
+  (sql/with-connection db
+    (let [min-id (get-id-extreme min-sql)
+          max-id (get-id-extreme max-sql)
+          next-id #(+ (rand-int (+ max-id (- min-id) 1)) min-id)]
+      (loop [result #{}]
+        (if (= (count result) amount) result
+            (recur (conj result (fetch-object next-id))))))))
 
+(defn- fetch-history [db {id :user-space-id type :type}]
+  (sql/with-connection db
+    (sql/with-query-results entries
+      ["select *  from history where user_space_id = ? and type = ?" id type]
+      (println "history size " (count entries))
+      (loop [entries entries result []]
+        (if (first entries)
+          (recur (rest entries) (cons (first entries) result))
+          result)))))
+
+(defn- insert-history [db entry]
+  (sql/with-connection db
+    (sql/insert-rows :history (vals entry))))
+  
+
+(defn load-sample [amount]
+  (let [remote-db (init-db (slurp remote-mysql-config))
+        local-db (init-db (slurp local-mysql-config))
+        objects (fetch-random-objects remote-db amount)]
+    (doseq [object objects]
+      (println "processing" object)
+      (doseq [entry (fetch-history remote-db object)]
+        (insert-history local-db entry)))))
