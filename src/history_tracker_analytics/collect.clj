@@ -113,7 +113,7 @@
 
 (defn- insert-history [db entry]
   (sql/with-connection db
-    (sql/insert-rows :history (vals entry))))
+    (sql/insert-records :history entry)))
   
 
 (defn load-sample [amount]
@@ -122,5 +122,9 @@
         objects (fetch-random-objects remote-db amount)]
     (doseq [object objects]
       (println "processing" object)
-      (doseq [entry (fetch-history remote-db object)]
-        (insert-history local-db entry)))))
+      (try (doseq [entry (fetch-history remote-db object)]
+             (insert-history local-db entry))
+           (catch Exception e (println e))))))
+
+;;watch -n 10 "mysql test -e 'select count(distinct user_space_id, type) from history'"
+;;watch -n 10 "mysql test -e 'select count(*) from history'"
