@@ -111,20 +111,56 @@
           (recur (rest entries) (cons (first entries) result))
           result)))))
 
+
 (defn- insert-history [db entry]
   (sql/with-connection db
     (sql/insert-records :history entry)))
-  
+
+(defn- configure []
+  {:remote-db (init-db (slurp remote-mysql-config))
+   :local-db (init-db (slurp local-mysql-config))})
 
 (defn load-sample [amount]
-  (let [remote-db (init-db (slurp remote-mysql-config))
-        local-db (init-db (slurp local-mysql-config))
+  (let [{remote-db :remote-db local-db :local-db} (configure)
         objects (fetch-random-objects remote-db amount)]
     (doseq [object objects]
       (println "processing" object)
       (try (doseq [entry (fetch-history remote-db object)]
              (insert-history local-db entry))
            (catch Exception e (println e))))))
+
+(defn- get-objects [db]
+  (sql/with-connection db
+    (sql/with-query-results rs ["select distinct user_space_id, type from history"]
+      (vec rs))))
+
+(defn- join-history [history entry]
+  [])
+
+(defn- dump-object [db object]
+  (println object))
+
+(defn- create-object [db object]
+  (sql/with-connection db
+    (sql/with-query-results rs
+      [(str "select * from history "
+            "where user_space_id = ? and type = ? "
+            "order by user_space_revision asc, local_revision asc")
+       (object :user_space_id) (object :type)]
+      (println "history length" (count rs))
+      (reduce join-history [] rs))))
+
+
+(defn convert []
+  (let [{db :local-db} (configure)
+        objects (get-objects db)]
+    (println "objects total" (count objects))
+    (doseq [index (range (count objects))]
+      (println "current index" index)
+      (->> index
+           (nth objects)
+           (create-object db)
+           (dump-object db)))))
 
 ;;watch -n 10 "mysql test -e 'select count(distinct user_space_id, type) from history'"
 ;;watch -n 10 "mysql test -e 'select count(*) from history'"
