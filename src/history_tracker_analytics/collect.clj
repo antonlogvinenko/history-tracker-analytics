@@ -99,7 +99,7 @@
           next-id #(+ (rand-int (+ max-id (- min-id) 1)) min-id)]
       (loop [result #{}]
         (if (= (count result) amount) result
-            (recur (conj result (fetch-object next-id))))))))
+            (recur (->> next-id fetch-object (conj result))))))))
 
 (defn- fetch-history [db {id :user-space-id type :type}]
   (sql/with-connection db
@@ -110,7 +110,6 @@
         (if (first entries)
           (recur (rest entries) (cons (first entries) result))
           result)))))
-
 
 (defn- insert-history [db entry]
   (sql/with-connection db
@@ -129,13 +128,36 @@
              (insert-history local-db entry))
            (catch Exception e (println e))))))
 
+
+
+
 (defn- get-objects [db]
   (sql/with-connection db
     (sql/with-query-results rs ["select distinct user_space_id, type from history"]
       (vec rs))))
 
-(defn- join-history [history entry]
-  [])
+(defn- join-xml [history
+                 {context :context state :state
+                  local-revision :local_revision
+                  user-space-revision :user_space_revision}]
+  (let [state (. state substring 54)
+        context (. context substring 54)]
+    (str history
+         "<object-state local_revision='" local-revision "' "
+         "user_space_revision='" user-space-revision "'>"
+         "<context>" context "</context>"
+         "<state>" state "</state>"
+         "</object-state>")))
+
+(defn- join-history [{history :history :as collected} entry]
+  (assoc collected :history (join-xml history entry)))
+
+(defn- create-meta [entry]
+  (assoc (select-keys entry [:type :user_space_id]) :history ""))
+
+(defn- create-object-from [rs]
+  (let [meta (-> rs first create-meta)]
+    (reduce join-history meta rs)))
 
 (defn- dump-object [db object]
   (println object))
@@ -148,14 +170,14 @@
             "order by user_space_revision asc, local_revision asc")
        (object :user_space_id) (object :type)]
       (println "history length" (count rs))
-      (reduce join-history [] rs))))
+      (create-object-from rs))))
 
 
 (defn convert []
   (let [{db :local-db} (configure)
-        objects (get-objects db)]
+        objects (drop 99 (take 100 (get-objects db)))]
     (println "objects total" (count objects))
-    (doseq [index (range (count objects))]
+    (doseq [index (-> objects count range)]
       (println "current index" index)
       (->> index
            (nth objects)
