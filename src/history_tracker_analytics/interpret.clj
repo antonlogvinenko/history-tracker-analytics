@@ -68,3 +68,19 @@
     (map #(Integer/parseInt %) strings)))
 
 
+
+
+
+(defn measure [f object]
+  (let [start (. System currentTimeMillis)
+        something (f object)
+        end (. System currentTimeMillis)]
+    (- end start)))
+
+(defn routine [object]
+  
+(defn analyse-converted-history [f]
+  (let [{db :local-db} (configure)]
+    (sql/with-connection db
+      (sql/with-query-results rs ["select history from history2"]
+        (->> rs (map :history) #(measure f))))))

@@ -2,7 +2,11 @@
   (:require [clojure.contrib.sql :as sql]
             [clojure.contrib.seq :as seq]
             [clj-time.local :as time])
-    (:use [clojureql.core :only (table select where)]))
+  (:use [clojureql.core :only (table select where)])
+  (:import [java.io StringReader]
+           [javax.xml.parsers DocumentBuilderFactory]
+           [org.xml.sax InputSource]
+           [javax.xml.transform.dom DOMResult]))
 
 ;;Reading MySQL settings
 (def mysql-settings {:classname "com.mysql.jdbc.Driver" :subprotocol "mysql"})
@@ -178,6 +182,67 @@
            (nth objects)
            (create-object db)
            (dump-object db)))))
+
+
+
+(defn measure-times [n f object]
+  (let [start (. System currentTimeMillis)
+        something (f object)
+        end (. System currentTimeMillis)]
+    (- end start)))
+
+(defn measure [n f object]
+  (-> n
+      (measure-times f object)
+      double
+      (/ n)))
+
+(defn get-root [text]
+  (let [source (InputSource. (StringReader. text))]
+    (.. DocumentBuilderFactory
+        newInstance newDocumentBuilder
+        (parse source) getDocumentElement)))
+
+(defn get-attributes [object name]
+  (.. object (getElementsByTagName name) (item 0)
+      (getElementsByTagName "attributes") (item 0)
+      (getElementsByTagName "attribute")))
+
+(defn parse-attribute [list attribute]
+  (cons
+   (reduce
+    #(assoc %1 %2 (. attribute getAttribute %2)) {} ["value" "name"])
+   list))
+
+(defn parse-attributes [attributes]
+  (let [attributes (map #(.item attributes %) (range (.getLength attributes)))]
+    (reduce parse-attribute [] attributes)))
+
+(defn parse-object-state [object-state]
+  (reduce
+   #(assoc %1 %2 (-> object-state (get-attributes %2) parse-attributes))
+   {} ["state" "context"]))
+
+(defn merge-history [history state]
+  (merge history state))
+
+(defn build-all [history object-state]
+  (->> object-state parse-object-state (merge-history history)))
+
+(defn routine [object]
+  (let [history (get-root object)
+        states (. history getElementsByTagName "object-state")
+        states (map #(.item states %) (range (.getLength states)))]
+    (spit (str "./out/very-temp-" "")  (reduce build-all {} states))))
+  
+(defn analyse-converted-history [f]
+  (let [{db :local-db} (configure)]
+    (sql/with-connection db
+      (sql/with-query-results rs ["select history from history2"]
+        (loop [result rs coll []]
+          (if (seq result)
+            (recur (rest result) (cons (->> result first :history (measure 5 f)) coll))
+            coll))))))
 
 ;;watch -n 10 "mysql test -e 'select count(distinct user_space_id, type) from history'"
 ;;watch -n 10 "mysql test -e 'select count(*) from history'"
