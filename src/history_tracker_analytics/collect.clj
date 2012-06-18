@@ -149,18 +149,13 @@
          "<state>" state "</state>"
          "</object-state>")))
 
-(defn- join-history [{history :history :as collected} entry]
-  (assoc collected :history (join-xml history entry)))
-
-(defn- create-meta [entry]
-  (assoc (select-keys entry [:type :user_space_id]) :history ""))
-
 (defn- create-object-from [rs]
-  (let [meta (-> rs first create-meta)]
-    (reduce join-history meta rs)))
+  (assoc (select-keys (first rs) [:type :user_space_id])
+    :history (str "<history>" (reduce join-xml "" rs) "</history>")))
 
 (defn- dump-object [db object]
-  (println object))
+  (sql/with-connection db
+    (sql/insert-records :history2 object)))
 
 (defn- create-object [db object]
   (sql/with-connection db
