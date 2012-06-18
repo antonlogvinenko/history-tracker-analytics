@@ -164,16 +164,16 @@
             "where user_space_id = ? and type = ? "
             "order by user_space_revision asc, local_revision asc")
        (object :user_space_id) (object :type)]
-      (println "history length" (count rs))
+      (println " [" (count rs) "]")
       (create-object-from rs))))
 
 
 (defn convert []
   (let [{db :local-db} (configure)
-        objects (drop 99 (take 100 (get-objects db)))]
+        objects (get-objects db)]
     (println "objects total" (count objects))
     (doseq [index (-> objects count range)]
-      (println "current index" index)
+      (print index)
       (->> index
            (nth objects)
            (create-object db)
@@ -181,3 +181,4 @@
 
 ;;watch -n 10 "mysql test -e 'select count(distinct user_space_id, type) from history'"
 ;;watch -n 10 "mysql test -e 'select count(*) from history'"
+;;watch -n 10 "mysql test -e 'select count(*) from history2'"
