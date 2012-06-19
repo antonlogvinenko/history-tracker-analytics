@@ -1,11 +1,13 @@
 (ns history-tracker-analytics.collect
   (:require [clojure.contrib.sql :as sql]
             [clojure.contrib.seq :as seq]
-            [clj-time.local :as time])
+            [clj-time.local :as time]
+            [clojure.contrib.json :as json])
   (:use [clojureql.core :only (table select where)])
   (:import [java.io StringReader]
            [javax.xml.parsers DocumentBuilderFactory]
            [org.xml.sax InputSource]
+           [java.text.SimpleDateFormat]
            [javax.xml.transform.dom DOMResult]))
 
 ;;Reading MySQL settings
@@ -153,7 +155,7 @@
          "<state>" state "</state>"
          "</object-state>")))
 
-(defn- create-object-from [rs]
+(defn- create-xml-object-from [rs]
   (assoc (select-keys (first rs) [:type :user_space_id])
     :history (str "<history>" (reduce join-xml "" rs) "</history>")))
 
@@ -161,7 +163,7 @@
   (sql/with-connection db
     (sql/insert-records :history2 object)))
 
-(defn- create-object [db object]
+(defn- create-object [db create-object-from object]
   (sql/with-connection db
     (sql/with-query-results rs
       [(str "select * from history "
@@ -171,8 +173,7 @@
       (println " [" (count rs) "]")
       (create-object-from rs))))
 
-
-(defn convert []
+(defn convert [create-object-from]
   (let [{db :local-db} (configure)
         objects (get-objects db)]
     (println "objects total" (count objects))
@@ -180,16 +181,23 @@
       (print index)
       (->> index
            (nth objects)
-           (create-object db)
+           (create-object db create-object-from)
            (dump-object db)))))
 
 
 
+
+
+
+
+
 (defn measure-times [n f object]
-  (let [start (. System currentTimeMillis)
-        something (f object)
-        end (. System currentTimeMillis)]
-    (- end start)))
+  (loop [n n acc 0]
+    (if (zero? n) acc
+        (let [start (. System currentTimeMillis)
+              something (f object)
+              end (. System currentTimeMillis)]
+          (recur (- n 1) (-> end (- start) (+ acc)))))))
 
 (defn measure [n f object]
   (-> n
@@ -207,6 +215,23 @@
   (.. object (getElementsByTagName name) (item 0)
       (getElementsByTagName "attributes") (item 0)
       (getElementsByTagName "attribute")))
+
+(defn- get-int [value]
+  (try (Integer/parseInt value) (catch Exception e)))
+
+(defn- get-double [value]
+  (try (Double/parseDouble value) (catch Exception e)))
+
+(defn- get-date [value]
+  (try (let [f (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:SS")]
+         (. f parse value))
+       (catch Exception e)))
+
+(defn- convert-attr [value]
+  (if-let [parsed (get-int value)] parsed
+          (if-let [parsed (get-double value)] parsed
+                  (if-let [parsed (get-date value)] parsed
+                          value))))
 
 (defn parse-attribute [list attribute]
   (cons
@@ -233,7 +258,7 @@
   (let [history (get-root object)
         states (. history getElementsByTagName "object-state")
         states (map #(.item states %) (range (.getLength states)))]
-    (spit (str "./out/very-temp-" "")  (reduce build-all {} states))))
+    (spit (str "./out/very-temp-" (rand)) (reduce build-all {} states))))
   
 (defn analyse-converted-history [f]
   (let [{db :local-db} (configure)]
@@ -243,6 +268,43 @@
           (if (seq result)
             (recur (rest result) (cons (->> result first :history (measure 5 f)) coll))
             coll))))))
+
+
+
+
+
+
+
+        
+(defn parse-json-attribute [json-map attribute]
+  (assoc json-map (. attribute getAttribute "name") (. attribute getAttribute "value")))
+
+(defn parse-json-attributes [attributes]
+  (let [attributes (map #(.item attributes %) (range (.getLength attributes)))]
+    (reduce parse-json-attribute {} attributes)))
+
+(defn- xml-to-json [xml]
+ (-> xml get-root (. getElementsByTagName "attribute") parse-json-attributes))
+
+(defn- join-json [history
+                 {context :context state :state
+                  local-revision :local_revision
+                  user-space-revision :user_space_revision}]
+  (let [state (xml-to-json (. state substring 54))
+        context (xml-to-json (. context substring 54))]
+    (conj history
+          {:local-revision local-revision
+           :user-space-revision user-space-revision
+           :context context :state state})))
+
+(defn- create-json-object-from [rs]
+  (-> rs
+      first
+      (select-keys [:type :user_space_id])
+      (assoc :history (->> rs
+                           (reduce join-json [])
+                           json/json-str))))
+
 
 ;;watch -n 10 "mysql test -e 'select count(distinct user_space_id, type) from history'"
 ;;watch -n 10 "mysql test -e 'select count(*) from history'"
