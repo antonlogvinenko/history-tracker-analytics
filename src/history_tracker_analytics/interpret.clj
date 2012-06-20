@@ -20,7 +20,7 @@
 
 (defn load-approximations [table-function-file-name]
   (let [data (load-file table-function-file-name)
-        reversed-data (map #(vec (reverse %)) data)]
+        reversed-data (map (comp reverse vec) data)]
     {:capacity-to-time (create-linear-interpolation data)
      :time-to-capacity (create-linear-interpolation reversed-data)}))
 
@@ -66,21 +66,3 @@
   (let [text (string/chop (slurp statistics-file-name))
         strings (.split text " ")]
     (map #(Integer/parseInt %) strings)))
-
-
-
-
-
-(defn measure [f object]
-  (let [start (. System currentTimeMillis)
-        something (f object)
-        end (. System currentTimeMillis)]
-    (- end start)))
-
-(defn routine [object]
-  
-(defn analyse-converted-history [f]
-  (let [{db :local-db} (configure)]
-    (sql/with-connection db
-      (sql/with-query-results rs ["select history from history2"]
-        (->> rs (map :history) #(measure f))))))

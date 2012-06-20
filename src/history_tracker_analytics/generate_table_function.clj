@@ -88,4 +88,4 @@
 (defn generate-table-function [file-name max-size step]
   (let [versions (range 1 max-size step)
         capacity-to-time (map capacity-to-time-avg versions)]
-    (spit file-name (vec capacity-to-time))))
+    (->> capacity-to-time vec (spit file-name))))
