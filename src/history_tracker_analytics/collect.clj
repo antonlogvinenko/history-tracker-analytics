@@ -15,7 +15,9 @@
 
 (defn- add-row [parameters row]
   (let [pair (.split row "=")]
-    (assoc parameters (keyword (first pair)) (second pair))))
+    (->> pair
+         second
+         (assoc parameters (-> pair first keyword)))))
 
 (defn- init-db [file]
   (reduce add-row mysql-settings (.split file "\n")))
@@ -35,7 +37,7 @@
         key (.hashCode (select-keys entry [:type :user_space_id]))
         size (count-entry-size entry)
         update #(+ size (if (nil? %) 0 %))]
-    (do (if (= (mod id print-freq) 0) (println id (count coll) (time/local-now)))
+    (do (if (-> id (mod print-freq) zero?) (println id (count coll) (time/local-now)))
         (update-in coll [key] update))))
 
 
@@ -114,7 +116,7 @@
       (println "history size " (count entries))
       (loop [entries entries result []]
         (if (first entries)
-          (recur (rest entries) (cons (first entries) result))
+          (recur (rest entries) (-> entries first (cons result)))
           result)))))
 
 (defn- insert-history [db entry]
@@ -197,7 +199,7 @@
         (let [start (. System currentTimeMillis)
               something (f object)
               end (. System currentTimeMillis)]
-          (recur (- n 1) (-> end (- start) (+ acc)))))))
+          (recur (dec n) (-> end (- start) (+ acc)))))))
 
 (defn measure [n f object]
   (-> n
@@ -254,20 +256,12 @@
 (defn build-all [history object-state]
   (->> object-state parse-object-state (merge-history history)))
 
-(defn routine [object]
+(defn routine-xml [object]
   (let [history (get-root object)
         states (. history getElementsByTagName "object-state")
         states (map #(.item states %) (range (.getLength states)))]
     (spit (str "./out/very-temp-" (rand)) (reduce build-all {} states))))
   
-(defn analyse-converted-history [f]
-  (let [{db :local-db} (configure)]
-    (sql/with-connection db
-      (sql/with-query-results rs ["select history from history2"]
-        (loop [result rs coll []]
-          (if (seq result)
-            (recur (rest result) (cons (->> result first :history (measure 5 f)) coll))
-            coll))))))
 
 
 
@@ -295,7 +289,8 @@
     (conj history
           {:local-revision local-revision
            :user-space-revision user-space-revision
-           :context context :state state})))
+           :context context
+           :state state})))
 
 (defn- create-json-object-from [rs]
   (-> rs
@@ -305,6 +300,34 @@
                            (reduce join-json [])
                            json/json-str))))
 
+(defn parse-json [object]
+  (json/read-json object))
+
+(defn update-values [m f]
+  (reduce (fn [r [k v]] (->> v f (assoc r k))) {} m))
+
+(defn- convert-and-merge [json1 json2]
+  (merge json1 json2))
+;;  (merge (update-values json1 convert-attr)
+;;         (update-values json2 convert-attr)))
+
+(defn routine-json [object]
+  (->> object
+       parse-json
+       (map #(select-keys % [:state :context]))
+       (reduce (partial merge-with merge))
+       (spit (str "./out/temp-" (rand)))))
+
+(defn analyse-converted-history [f]
+  (let [{db :local-db} (configure)]
+    (sql/with-connection db
+      (sql/with-query-results rs ["select history from history2"]
+        (loop [result rs coll []]
+          (if (seq result)
+            (recur (rest result) (cons (->> result first :history (measure 10 f)) coll))
+            coll))))))
+
+(defn a [c] (println c c))
 
 ;;watch -n 10 "mysql test -e 'select count(distinct user_space_id, type) from history'"
 ;;watch -n 10 "mysql test -e 'select count(*) from history'"

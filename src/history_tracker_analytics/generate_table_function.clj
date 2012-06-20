@@ -71,20 +71,19 @@
     (str "<bulletins>" content "</bulletins>")))
 
 (defn measure [sample]
-  (let [time-0 (. System currentTimeMillis)
-        root (vec (parse-xml sample))]
-    (do (spit "very-temp.txt" root)
+  (let [time-0 (. System currentTimeMillis)]
+    (do (->> sample parse-xml vec (spit "very-temp.txt"))
         (- (. System currentTimeMillis) time-0))))
 
 (defn capacity-to-time-avg [length]
   (let [sample (generate-xml-string length)
         repeat-count 5
-        generating-time (loop [round 0 time 0]
-                          (if (= round repeat-count) time
-                              (recur (+ round 1) (+ time (measure sample)))))
-        bytes (* 2 (count sample))]
+        generating-time (loop [round repeat-count time 0]
+                          (if (zero? round) time
+                              (-> sample measure (+ time) (recur (dec round)))))
+        bytes (-> sample count (* 2))]
     (do (println "generated length" length)
-        [bytes (double (/ generating-time repeat-count))])))
+        [bytes (->> repeat-count (/ generating-time) double)])))
 
 (defn generate-table-function [file-name max-size step]
   (let [versions (range 1 max-size step)
