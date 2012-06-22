@@ -141,7 +141,7 @@
 
 (defn- get-objects [db]
   (sql/with-connection db
-    (sql/with-query-results rs ["select distinct user_space_id, type from history"]
+    (sql/with-query-results rs ["select distinct user_space_id, type from history where type='bulletin' limit 200"]
       (vec rs))))
 
 (defn- join-xml [history
@@ -171,14 +171,14 @@
       [(str "select * from history "
             "where user_space_id = ? and type = ? "
             "order by user_space_revision asc, local_revision asc")
-       (object :user_space_id) (object :type)]
+       (object :user-space-id) (object :type)]
       (println " [" (count rs) "]")
       (create-object-from rs))))
 
 (defn convert [create-object-from]
-  (let [{db :local-db} (configure)
-        objects (get-objects db)]
-    (println "objects total" (count objects))
+  (let [{db :remote-db} (configure)
+        objects (-> db (fetch-random-objects 200) vec)]
+    (println "objects total" objects)
     (doseq [index (-> objects count range)]
       (print index)
       (->> index
@@ -300,23 +300,16 @@
                            (reduce join-json [])
                            json/json-str))))
 
-(defn parse-json [object]
-  (json/read-json object))
-
 (defn update-values [m f]
   (reduce (fn [r [k v]] (->> v f (assoc r k))) {} m))
 
-(defn- convert-and-merge [json1 json2]
-  (merge json1 json2))
-;;  (merge (update-values json1 convert-attr)
-;;         (update-values json2 convert-attr)))
-
-(defn routine-json [object]
+(defn routine-json [object page]
   (->> object
-       parse-json
+       json/read-json
        (map #(select-keys % [:state :context]))
        (reduce (partial merge-with merge))
        (spit (str "./out/temp-" (rand)))))
+
 
 (defn analyse-converted-history [f]
   (let [{db :local-db} (configure)]
@@ -327,7 +320,41 @@
             (recur (rest result) (cons (->> result first :history (measure 10 f)) coll))
             coll))))))
 
-(defn a [c] (println c c))
+(defn skip [x] "skipped")
+(defn display [f x]
+  (do (-> x f println) x))
+(defn json-to-xml [x]
+  x)
+(defn cut [page history]
+  history)
+(defmulti smart-merge (fn [x y] (and (map? x) (map? y))))
+(defmethod smart-merge true [x y] (merge x y))
+(defmethod smart-merge false [x y] y)
+(defn reducer [history increment]
+  (cons
+   (merge-with smart-merge (first history) increment)
+   history))
+(defn reducing-map [init-accum f coll]
+  (loop [coll coll accum init-accumg]
+    (if (seq coll)
+      (recur (rest coll) (cons (f (first accum) (first coll)) accum))
+      accum)))
+    
+  
+(defn get-page-from [page user-space-id type]
+  (let [{db :remote-db} (configure)]
+    (sql/with-connection db
+      (sql/with-query-results rs
+        ["select history from history2 where user_space_id=? and type=?" user-space-id type]
+        (->> rs
+             first
+             :history
+             json/read-json
+             (display count)
+             (cut page)
+             (reducing-map [] reducer)
+;;             (reduce reducer [{}])
+             json-to-xml)))))
 
 ;;watch -n 10 "mysql test -e 'select count(distinct user_space_id, type) from history'"
 ;;watch -n 10 "mysql test -e 'select count(*) from history'"
