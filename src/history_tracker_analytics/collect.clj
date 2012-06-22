@@ -335,7 +335,7 @@
    (merge-with smart-merge (first history) increment)
    history))
 (defn reducing-map [init-accum f coll]
-  (loop [coll coll accum init-accumg]
+  (loop [coll coll accum init-accumm]
     (if (seq coll)
       (recur (rest coll) (cons (f (first accum) (first coll)) accum))
       accum)))
