@@ -3,7 +3,10 @@
             [clojure.contrib.seq :as seq]
             [clj-time.local :as time]
             [clojure.contrib.json :as json])
-  (:use [clojureql.core :only (table select where)])
+  (:use [clojureql.core :only (table select where)]
+        [clojure.contrib.json :only (read-json)]
+        [clojure.contrib.prxml :only (prxml)]
+        [clojure.contrib.duck-streams :only (with-out-writer)])
   (:import [java.io StringReader]
            [javax.xml.parsers DocumentBuilderFactory]
            [org.xml.sax InputSource]
@@ -171,13 +174,13 @@
       [(str "select * from history "
             "where user_space_id = ? and type = ? "
             "order by user_space_revision asc, local_revision asc")
-       (object :user-space-id) (object :type)]
+       (object :user_space_id) (object :type)]
       (println " [" (count rs) "]")
       (create-object-from rs))))
 
 (defn convert [create-object-from]
-  (let [{db :remote-db} (configure)
-        objects (-> db (fetch-random-objects 200) vec)]
+  (let [{db :local-db} (configure)
+        objects (get-objects db)]
     (println "objects total" objects)
     (doseq [index (-> objects count range)]
       (print index)
@@ -320,42 +323,61 @@
             (recur (rest result) (cons (->> result first :history (measure 10 f)) coll))
             coll))))))
 
-(defn skip [x] "skipped")
-(defn display [f x]
-  (do (-> x f println) x))
-(defn json-to-xml [x]
-  x)
-(defn cut [page history]
-  history)
-(defmulti smart-merge (fn [x y] (and (map? x) (map? y))))
-(defmethod smart-merge true [x y] (merge x y))
-(defmethod smart-merge false [x y] y)
-(defn reducer [history increment]
-  (cons
-   (merge-with smart-merge (first history) increment)
-   history))
-(defn reducing-map [init-accum f coll]
-  (loop [coll coll accum init-accumm]
-    (if (seq coll)
-      (recur (rest coll) (cons (f (first accum) (first coll)) accum))
-      accum)))
+(defn display
+  ([x] (display identity x))
+  ([f x] (do (-> x f println) x)))
+
+
+;;partial history
+
+;;writing history
+
+;;handling errors
+;;tests for reading, writing
+;;fix migration
+;;fix data format
+
+(defn attribute [attribute]
+  [:atribute {:name (first attribute) :value (second attribute)}])
+
+(defn get-states-list [object-state]
+  [:object-state {:revision (:user-space-revision object-state) :id 1 :state-time 1}
+   [:object {:id 1 :type "bulletin"}]
+   (cons :state (->> object-state :state (map attribute)))
+   (cons :context (->> object-state :context (map attribute)))])
+
+(defn get-object-states [history]
+  [:history {}
+   (map get-states-list history)])
+
+(defn json-to-xml [history]
+  (let [wr (java.io.StringWriter.)]
+    (with-out-writer wr (-> history get-object-states prxml))
+    (-> wr .getBuffer .toString)))
     
-  
-(defn get-page-from [page user-space-id type]
-  (let [{db :remote-db} (configure)]
+(defn partial-history [page page-size history]
+  (let [found (-> page (* page-size) (take history))
+        found-length (count found)]
+    (if (->> page dec (* page-size) (<= found-length))
+      [] (take-last page-size found))))
+
+(defn delta-merge [& [x y :as maps]]
+  (if (every? map? maps) (merge x y) (last maps)))
+
+(defn get-history-reductions [rs]
+  (->> rs first :history read-json (reductions delta-merge)))
+
+(defn get-page-from [page page-size user-space-id type]
+  (let [{db :local-db} (configure)]
     (sql/with-connection db
       (sql/with-query-results rs
         ["select history from history2 where user_space_id=? and type=?" user-space-id type]
         (->> rs
-             first
-             :history
-             json/read-json
-             (display count)
-             (cut page)
-             (reducing-map [] reducer)
-;;             (reduce reducer [{}])
+             get-history-reductions
+             (take 10)
+             (partial-history page page-size)
              json-to-xml)))))
 
-;;watch -n 10 "mysql test -e 'select count(distinct user_space_id, type) from history'"
+;;Watch -n 10 "mysql test -e 'select count(distinct user_space_id, type) from history'"
 ;;watch -n 10 "mysql test -e 'select count(*) from history'"
 ;;watch -n 10 "mysql test -e 'select count(*) from history2'"
