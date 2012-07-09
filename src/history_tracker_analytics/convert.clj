@@ -28,13 +28,13 @@
 (defn- configure []
   {:remote-db (init-db (slurp remote-mysql-config))
    :local-db (init-db (slurp local-mysql-config))})
-(defn- dump-object [db object]
-  (sql/with-connection db
-    (sql/insert-records :history2 object)))
 (defn- get-objects [db amount]
   (sql/with-connection db
     (sql/with-query-results rs ["select distinct user_space_id, type from history where type='bulletin' limit ?" amount]
       (vec rs))))
+(defn- dump-object [db object]
+  (sql/with-connection db
+    (sql/insert-records :history2 object)))
 (defn- create-object [db create-object-from object]
   (sql/with-connection db
     (sql/with-query-results rs
@@ -45,6 +45,9 @@
       (println " [" (count rs) "]")
       (create-object-from rs))))
 
+
+
+;;xml to clojure data structures
 (defn get-value [attribute]
   (let [field (->> "value" (. attribute getAttribute))]
     (if (-> field empty? not)
@@ -53,8 +56,6 @@
         (if (-> text empty? not)
           text
           nil)))))
-
-;;xml to clojure data structures
 (defn get-root [text]
   (let [source (InputSource. (StringReader. text))]
     (.. DocumentBuilderFactory
@@ -82,6 +83,7 @@
          :context context
          :state state)))))
 
+
 (defmulti history-merge (fn [x y] (every? map? [x y])))
 (defmethod history-merge false [x y] y)
 (defmethod history-merge true [x y]
@@ -92,7 +94,6 @@
         (filter (comp not nil? val))
         (into {})))
    :state-type))
-
 (defn history-reductions [increments]
   (->> increments
        (reductions history-merge {})
@@ -110,7 +111,6 @@
            (assoc diff key (if (and av bv) (state-diff av bv) bv)))))
      {} (concat (keys a) (keys b)))
     b))
-
 (defn history-to-increments [history]
   (loop [prev {}, history history, increments []]
     (if (empty? history) increments
@@ -152,5 +152,5 @@
            (create-object local-db create-object-from)
            (dump-object local-db)))))
 
-(defn convert-json [amount ]
+(defn convert-json [amount]
   (convert create-json-object-from amount))
