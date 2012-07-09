@@ -14,6 +14,8 @@
            [javax.xml.transform.dom DOMResult]))
 
 
+(def df (java.text.SimpleDateFormat. "yyyy-MM-dd HH:mm:ss"))
+
 ;;database settings
 (def remote-mysql-config "remote.ini")
 (def local-mysql-config "local.ini")
@@ -71,6 +73,7 @@
 (defn- join-json [history
                   {context :context state :state
                    state-type :state_type
+                   state-time :state_time
                   user-space-revision :user_space_revision}]
   (let [state (xml-to-json (. state substring 54))
         context (xml-to-json (. context substring 54))]
@@ -80,6 +83,7 @@
        (assoc
            {(if (nil? revision) {} {:user-space-revision revision})}
          :state-type state-type
+         :state-time (->> state-time .getTime (java.util.Date.) (.format df))
          :context context
          :state state)))))
 
