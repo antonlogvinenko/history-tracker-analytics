@@ -1,4 +1,4 @@
-(ns history-tracker-analytics.collect
+(ns history-tracker-analytics.convert
   (:require [clojure.contrib.sql :as sql]
             [clojure.contrib.seq :as seq]
             [clj-time.local :as time]
@@ -33,10 +33,25 @@
     (sql/insert-records :history2 object)))
 (defn- get-objects [db]
   (sql/with-connection db
-    (sql/with-query-results rs ["select distinct user_space_id, type from history where type='bulletin' limit 200"]
+    (sql/with-query-results rs ["select distinct user_space_id, type from history where type='bulletin' limit 10"]
       (vec rs))))
+(defn- create-object [db create-object-from object]
+  (sql/with-connection db
+    (sql/with-query-results rs
+      [(str "select * from history "
+            "where user_space_id = ? and type = ? "
+            "order by user_space_revision asc, local_revision asc")
+       (object :user_space_id) (object :type)]
+      (println " [" (count rs) "]")
+      (create-object-from rs))))
+
 
 ;;xml to clojure data structures
+(defn get-root [text]
+  (let [source (InputSource. (StringReader. text))]
+    (.. DocumentBuilderFactory
+        newInstance newDocumentBuilder
+        (parse source) getDocumentElement)))
 (defn parse-json-attribute [json-map attribute]
   (assoc json-map (. attribute getAttribute "name") (. attribute getAttribute "value")))
 (defn parse-json-attributes [attributes]
@@ -85,6 +100,7 @@
          (->> history first (state-diff prev) (conj increments))))))
 
 
+
 (defn convert [create-object-from]
   (let [{db :local-db} (configure)
         objects (get-objects db)]
@@ -95,3 +111,6 @@
            (nth objects)
            (create-object db create-object-from)
            (dump-object db)))))
+
+(defn convert-json []
+  (convert create-json-object-from))
