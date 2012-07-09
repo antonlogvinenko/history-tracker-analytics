@@ -68,7 +68,8 @@
 (defn- xml-to-json [xml]
  (-> xml get-root (. getElementsByTagName "attribute") parse-json-attributes))
 (defn- join-json [history
-                 {context :context state :state
+                  {context :context state :state
+                   state-type :state_type
                   user-space-revision :user_space_revision}]
   (let [state (xml-to-json (. state substring 54))
         context (xml-to-json (. context substring 54))]
@@ -76,26 +77,26 @@
       (conj
        history
        (assoc
-        {(if (nil? revision) {} {:user-space-revision revision})}
-        :context context
-        :state state)))))
-(defn typed-pack [type rs]
-  (if (= type "bulletin")
-    {:ol rs :ul []}
-    {:ul rs :ol []}))
-(defn display[x] (println x) x)
-(defn send-json[x] (json-str x :escape-unicode false))
-(defn- create-json-object-from [rs]
-  (-> rs
-      first
-      (select-keys [:type :user_space_id])
-      (assoc :history (->> rs
-                           (reduce join-json [])
-                           (typed-pack (-> rs first :type))
-                           send-json
-                           display))))
-                          
-                        
+           {(if (nil? revision) {} {:user-space-revision revision})}
+         :state-type state-type
+         :context context
+         :state state)))))
+
+(defmulti history-merge (fn [x y] (every? map? [x y])))
+(defmethod history-merge false [x y] y)
+(defmethod history-merge true [x y]
+  (dissoc
+   (if (-> :state-type y (= "snapshot")) y
+       (->>
+        (merge-with history-merge x y)
+        (filter (comp not nil? val))
+        (into {})))
+   :state-type))
+
+(defn history-reductions [increments]
+  (->> increments
+       (reductions history-merge {})
+       rest))
 
 
 ;;history to increments
@@ -103,7 +104,7 @@
   (if (every? (partial instance? java.util.Map) [a b])
     (reduce
      (fn [diff key]
-       (let [av (key a) bv (key b)]
+       (let [av (a key) bv (b key)]
          (if (= av bv)
            diff
            (assoc diff key (if (and av bv) (state-diff av bv) bv)))))
@@ -118,10 +119,30 @@
          (rest history)
          (->> history first (state-diff prev) (conj increments))))))
 
+(defn typed-pack [type rs]
+  (if (= type "bulletin")
+    {:ol rs :ul []}
+    {:ul rs :ol []}))
+(defn display[x] (println x) x)
+(defn send-json[x] (json-str x :escape-unicode false))
+(defn- create-json-object-from [rs]
+  (-> rs
+      first
+      (select-keys [:type :user_space_id])
+      (assoc :history (->> rs
+                           (reduce join-json [])
+                           history-reductions
+                           history-to-increments
+                           (typed-pack (-> rs first :type))
+                           send-json
+                           display))))
+                          
+
+
 
 
 (defn convert [create-object-from amount]
-  (let [{local-db :remote-db} (configure)
+  (let [{local-db :local-db} (configure)
         objects (get-objects local-db amount)]
     (println "objects total" objects)
     (doseq [index (-> objects count range)]
