@@ -14,6 +14,7 @@
            [javax.xml.transform.dom DOMResult]))
 
 
+;;database settings
 (def remote-mysql-config "remote.ini")
 (def local-mysql-config "local.ini")
 (def mysql-settings {:classname "com.mysql.jdbc.Driver" :subprotocol "mysql"})
@@ -35,7 +36,7 @@
     (sql/with-query-results rs ["select distinct user_space_id, type from history where type='bulletin' limit 200"]
       (vec rs))))
 
-
+;;xml to clojure data structures
 (defn parse-json-attribute [json-map attribute]
   (assoc json-map (. attribute getAttribute "name") (. attribute getAttribute "value")))
 (defn parse-json-attributes [attributes]
@@ -61,6 +62,27 @@
       (assoc :history (->> rs
                            (reduce join-json [])
                            json/json-str))))
+
+
+;;history to increments
+(defn state-diff [a b]
+  (if (every? (partial instance? java.util.Map) [a b])
+    (reduce
+     (fn [diff key]
+       (let [av (key a) bv (key b)]
+         (if (= av bv)
+           diff
+           (assoc diff key (if (and av bv) (state-diff av bv) bv)))))
+     {} (concat (keys a) (keys b)))
+    b))
+
+(defn history-to-increments [history]
+  (loop [prev {}, history history, increments []]
+    (if (empty? history) increments
+        (recur
+         (first history)
+         (rest history)
+         (->> history first (state-diff prev) (conj increments))))))
 
 
 (defn convert [create-object-from]
