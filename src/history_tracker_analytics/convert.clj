@@ -4,7 +4,7 @@
             [clj-time.local :as time]
             [clojure.contrib.json :as json])
   (:use [clojureql.core :only (table select where)]
-        [clojure.contrib.json :only (read-json)]
+        [clojure.data.json :only (json-str)]
         [clojure.contrib.prxml :only (prxml)]
         [clojure.contrib.duck-streams :only (with-out-writer)])
   (:import [java.io StringReader]
@@ -31,9 +31,9 @@
 (defn- dump-object [db object]
   (sql/with-connection db
     (sql/insert-records :history2 object)))
-(defn- get-objects [db]
+(defn- get-objects [db amount]
   (sql/with-connection db
-    (sql/with-query-results rs ["select distinct user_space_id, type from history where type='bulletin' limit 10"]
+    (sql/with-query-results rs ["select distinct user_space_id, type from history where type='bulletin' limit ?" amount]
       (vec rs))))
 (defn- create-object [db create-object-from object]
   (sql/with-connection db
@@ -45,6 +45,14 @@
       (println " [" (count rs) "]")
       (create-object-from rs))))
 
+(defn get-value [attribute]
+  (let [field (->> "value" (. attribute getAttribute))]
+    (if (-> field empty? not)
+      field
+      (let [text (-> (. attribute getTextContent))]
+        (if (-> text empty? not)
+          text
+          nil)))))
 
 ;;xml to clojure data structures
 (defn get-root [text]
@@ -53,7 +61,7 @@
         newInstance newDocumentBuilder
         (parse source) getDocumentElement)))
 (defn parse-json-attribute [json-map attribute]
-  (assoc json-map (. attribute getAttribute "name") (. attribute getAttribute "value")))
+  (assoc json-map (. attribute getAttribute "name") (get-value attribute)))
 (defn parse-json-attributes [attributes]
   (let [attributes (map #(.item attributes %) (range (.getLength attributes)))]
     (reduce parse-json-attribute {} attributes)))
@@ -61,22 +69,33 @@
  (-> xml get-root (. getElementsByTagName "attribute") parse-json-attributes))
 (defn- join-json [history
                  {context :context state :state
-                  local-revision :local_revision
                   user-space-revision :user_space_revision}]
   (let [state (xml-to-json (. state substring 54))
         context (xml-to-json (. context substring 54))]
-    (conj history
-          {:local-revision local-revision
-           :user-space-revision user-space-revision
-           :context context
-           :state state})))
+    (let [revision (:user-space-revision user-space-revision)]
+      (conj
+       history
+       (assoc
+        {(if (nil? revision) {} {:user-space-revision revision})}
+        :context context
+        :state state)))))
+(defn typed-pack [type rs]
+  (if (= type "bulletin")
+    {:ol rs :ul []}
+    {:ul rs :ol []}))
+(defn display[x] (println x) x)
+(defn send-json[x] (json-str x :escape-unicode false))
 (defn- create-json-object-from [rs]
   (-> rs
       first
       (select-keys [:type :user_space_id])
       (assoc :history (->> rs
                            (reduce join-json [])
-                           json/json-str))))
+                           (typed-pack (-> rs first :type))
+                           send-json
+                           display))))
+                          
+                        
 
 
 ;;history to increments
@@ -101,16 +120,16 @@
 
 
 
-(defn convert [create-object-from]
-  (let [{db :local-db} (configure)
-        objects (get-objects db)]
+(defn convert [create-object-from amount]
+  (let [{local-db :remote-db} (configure)
+        objects (get-objects local-db amount)]
     (println "objects total" objects)
     (doseq [index (-> objects count range)]
       (print index)
       (->> index
            (nth objects)
-           (create-object db create-object-from)
-           (dump-object db)))))
+           (create-object local-db create-object-from)
+           (dump-object local-db)))))
 
-(defn convert-json []
-  (convert create-json-object-from))
+(defn convert-json [amount ]
+  (convert create-json-object-from amount))
