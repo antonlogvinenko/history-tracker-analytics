@@ -328,8 +328,6 @@
   ([f x] (do (-> x f println) x)))
 
 
-;;partial history
-
 ;;writing history
 
 ;;handling errors
@@ -337,47 +335,47 @@
 ;;fix migration
 ;;fix data format
 
+(defn delta-merge [x y]
+  (if (every? map? [x y]) (merge x y) y))
+(defn get-history-reductions [rs]
+  (->> rs first :history read-json (reductions delta-merge)))
+
 (defn attribute [attribute]
   [:atribute {:name (first attribute) :value (second attribute)}])
-
 (defn get-states-list [object-state]
   [:object-state {:revision (:user-space-revision object-state) :id 1 :state-time 1}
    [:object {:id 1 :type "bulletin"}]
    (cons :state (->> object-state :state (map attribute)))
    (cons :context (->> object-state :context (map attribute)))])
-
 (defn get-object-states [history]
-  [:history {}
-   (map get-states-list history)])
-
+  [:history {} (map get-states-list history)])
 (defn json-to-xml [history]
   (let [wr (java.io.StringWriter.)]
-    (with-out-writer wr (-> history get-object-states prxml))
-    (-> wr .getBuffer .toString)))
+    (-> wr
+        (with-out-writer (-> history get-object-states prxml) wr)
+        .toString)))
     
-(defn partial-history [page page-size history]
+(defn history-page-filter [page page-size history]
   (let [found (-> page (* page-size) (take history))
         found-length (count found)]
     (if (->> page dec (* page-size) (<= found-length))
       [] (take-last page-size found))))
 
-(defn delta-merge [& [x y :as maps]]
-  (if (every? map? maps) (merge x y) (last maps)))
-
-(defn get-history-reductions [rs]
-  (->> rs first :history read-json (reductions delta-merge)))
-
-(defn get-page-from [page page-size user-space-id type]
+(defn read-history [user-space-id type filter]
   (let [{db :local-db} (configure)]
     (sql/with-connection db
       (sql/with-query-results rs
         ["select history from history2 where user_space_id=? and type=?" user-space-id type]
-        (->> rs
-             get-history-reductions
-             (take 10)
-             (partial-history page page-size)
-             json-to-xml)))))
+        (->> rs get-history-reductions filter)))))
+                                      
+(defn read-history-page [page page-size user-space-id type]
+  (->> (partial history-page-filter page page-size)
+       (read-history user-space-id type)
+       json-to-xml))
 
+(defn write-history [state user-space-id type]
+  (let [history (read-history user-space-id type seq)]
+        (spit "a.txt" history)))
 ;;Watch -n 10 "mysql test -e 'select count(distinct user_space_id, type) from history'"
 ;;watch -n 10 "mysql test -e 'select count(*) from history'"
 ;;watch -n 10 "mysql test -e 'select count(*) from history2'"
