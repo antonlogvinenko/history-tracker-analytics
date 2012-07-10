@@ -15,6 +15,7 @@
 
 
 (def df (java.text.SimpleDateFormat. "yyyy-MM-dd HH:mm:ss"))
+(def do-display true)
 
 ;;database settings
 (def remote-mysql-config "remote.ini")
@@ -127,7 +128,8 @@
   (if (= type "bulletin")
     {:ol rs :ul []}
     {:ul rs :ol []}))
-(defn display[x] (println x) x)
+
+(defn display[x] (if do-display (println x)) x)
 (defn send-json[x] (json-str x :escape-unicode false))
 (defn- create-json-object-from [rs]
   (-> rs
@@ -146,7 +148,7 @@
 
 
 (defn convert [create-object-from amount]
-  (let [{local-db :local-db} (configure)
+  (let [{local-db :remote-db} (configure)
         objects (get-objects local-db amount)]
     (println "objects total" objects)
     (doseq [index (-> objects count range)]
@@ -155,6 +157,7 @@
            (nth objects)
            (create-object local-db create-object-from)
            (dump-object local-db)))))
+
 
 (defn convert-json [amount]
   (convert create-json-object-from amount))
