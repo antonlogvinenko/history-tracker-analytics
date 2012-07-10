@@ -31,9 +31,9 @@
 (defn- configure []
   {:remote-db (init-db (slurp remote-mysql-config))
    :local-db (init-db (slurp local-mysql-config))})
-(defn- get-objects [db amount]
+(defn- get-objects [db type amount]
   (sql/with-connection db
-    (sql/with-query-results rs ["select distinct user_space_id, type from history where type='bulletin' limit ?" amount]
+    (sql/with-query-results rs ["select distinct user_space_id, type from history where type=? and (local_revision > 2 or user_space_revision > 2) limit ?" type amount]
       (vec rs))))
 (defn- dump-object [db object]
   (sql/with-connection db
@@ -147,9 +147,9 @@
 
 
 
-(defn convert [create-object-from amount]
+(defn convert [create-object-from type amount]
   (let [{local-db :remote-db} (configure)
-        objects (get-objects local-db amount)]
+        objects (get-objects local-db type amount)]
     (println "objects total" objects)
     (doseq [index (-> objects count range)]
       (print index)
@@ -158,6 +158,6 @@
            (create-object local-db create-object-from)
            (dump-object local-db)))))
 
-
-(defn convert-json [amount]
-  (convert create-json-object-from amount))
+(def do-display false)
+(defn convert-json [type amount]
+  (convert create-json-object-from type amount))
