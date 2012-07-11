@@ -1,8 +1,7 @@
 (ns history-tracker-analytics.convert
   (:require [clojure.contrib.sql :as sql]
             [clojure.contrib.seq :as seq]
-            [clj-time.local :as time]
-            [clojure.contrib.json :as json])
+            [clj-time.local :as time])
   (:use [clojureql.core :only (table select where)]
         [clojure.data.json :only (json-str)]
         [clojure.contrib.prxml :only (prxml)]
@@ -16,6 +15,29 @@
 
 (def df (java.text.SimpleDateFormat. "yyyy-MM-dd HH:mm:ss"))
 (def do-display true)
+
+(defn- get-int [value]
+  (try (Integer/parseInt value) (catch Exception e)))
+
+(defn- get-double [value]
+  (try (Double/parseDouble value) (catch Exception e)))
+
+(defn- get-date [value]
+  (try (let [f (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:SS")]
+         (->> value (.parse f) (.format f)))
+       (catch Exception e)))
+
+(defn- convert-attr [attribute]
+  (let [value (get-value attribute)
+        type (.getAttribute attribute "type")]
+    (case type
+      "string" value
+      "integer" (Integer/parseInt value)
+      "float" (Float/parseFloat value)
+      "datetime" (get-date value)
+      "boolean" (Boolean/parseBoolean value)
+      value)))
+
 
 ;;database settings
 (def remote-mysql-config "remote.ini")
@@ -65,7 +87,7 @@
         newInstance newDocumentBuilder
         (parse source) getDocumentElement)))
 (defn parse-json-attribute [json-map attribute]
-  (assoc json-map (. attribute getAttribute "name") (get-value attribute)))
+  (assoc json-map (. attribute getAttribute "name") (convert-attr attrubute)))
 (defn parse-json-attributes [attributes]
   (let [attributes (map #(.item attributes %) (range (.getLength attributes)))]
     (reduce parse-json-attribute {} attributes)))
