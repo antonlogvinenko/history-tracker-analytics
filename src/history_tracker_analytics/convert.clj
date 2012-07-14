@@ -3,7 +3,7 @@
             [clojure.contrib.seq :as seq]
             [clj-time.local :as time])
   (:use [clojureql.core :only (table select where)]
-        [clojure.data.json :only (json-str)]
+        [clojure.data.json :only (json-str read-json)]
         [clojure.contrib.prxml :only (prxml)]
         [clojure.contrib.duck-streams :only (with-out-writer)])
   (:import [java.io StringReader]
@@ -14,6 +14,7 @@
 
 
 (def df (java.text.SimpleDateFormat. "yyyy-MM-dd HH:mm:ss"))
+(def df2 (java.text.SimpleDateFormat. "yyy-MM-dd'T'HH:mm:ss"))
 (def do-display true)
 
 (defn- get-int [value]
@@ -23,15 +24,26 @@
   (try (Double/parseDouble value) (catch Exception e)))
 
 (defn- get-date [value]
-  (try (let [f (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:SS")]
-         (->> value (.parse f) (.format f)))
-       (catch Exception e)))
+  (try (->> value (.parse df) (.format df))
+       (catch Exception e (try (->> value (.parse df2) (.format df))
+                               (catch Exception e value)))))
+
+(def convert-attr)
+
+(defn- get-array [attribute]
+  (let [elements (-> attribute
+                     (.getElementsByTagName "array")
+                     (.item 0)
+                     (.getElementsByTagName "element"))]
+    (map #(->> % (.item elements) convert-attr) (range (.getLength elements)))))
 
 (defn- convert-attr [attribute]
   (let [value (get-value attribute)
         type (.getAttribute attribute "type")]
     (case type
-      "string" value
+      "removed" nil
+      "string" (get-date value)
+      "array" (get-array attribute)
       "integer" (Integer/parseInt value)
       "float" (Float/parseFloat value)
       "datetime" (get-date value)
@@ -55,7 +67,7 @@
    :local-db (init-db (slurp local-mysql-config))})
 (defn- get-objects [db type amount]
   (sql/with-connection db
-    (sql/with-query-results rs ["select distinct user_space_id, type from history where type=? and (local_revision > 2 or user_space_revision > 2) limit ?" type amount]
+    (sql/with-query-results rs ["select distinct user_space_id, type from history where type=? and (user_space_revision > 3 or local_revision > 3) limit ?" "bulletin" amount]
       (vec rs))))
 (defn- dump-object [db object]
   (sql/with-connection db
@@ -80,17 +92,17 @@
       (let [text (-> (. attribute getTextContent))]
         (if (-> text empty? not)
           text
-          nil)))))
+          "")))))
 (defn get-root [text]
   (let [source (InputSource. (StringReader. text))]
     (.. DocumentBuilderFactory
         newInstance newDocumentBuilder
         (parse source) getDocumentElement)))
 (defn parse-json-attribute [json-map attribute]
-  (assoc json-map (. attribute getAttribute "name") (convert-attr attrubute)))
+  (assoc json-map (. attribute getAttribute "name") (convert-attr attribute)))
 (defn parse-json-attributes [attributes]
   (let [attributes (map #(.item attributes %) (range (.getLength attributes)))]
-    (reduce parse-json-attribute {} attributes)))
+    (reduce parse-json-attribute (array-map) attributes)))
 (defn- xml-to-json [xml]
  (-> xml get-root (. getElementsByTagName "attribute") parse-json-attributes))
 (defn- join-json [history
@@ -100,15 +112,14 @@
                   user-space-revision :user_space_revision}]
   (let [state (xml-to-json (. state substring 54))
         context (xml-to-json (. context substring 54))]
-    (let [revision (:user-space-revision user-space-revision)]
-      (conj
-       history
-       (assoc
-           {(if (nil? revision) {} {:user-space-revision revision})}
-         :state-type state-type
-         :state-time (->> state-time .getTime (java.util.Date.) (.format df))
-         :context context
-         :state state)))))
+    (conj
+     history
+     (assoc
+       (if (nil? user-space-revision) {} {:user-space-revision user-space-revision})
+       :state-type state-type
+       :state-time (->> state-time .getTime (java.util.Date.) (.format df))
+       :context context
+       :state state))))
 
 
 (defmulti history-merge (fn [x y] (every? map? [x y])))
@@ -119,11 +130,11 @@
        (->>
         (merge-with history-merge x y)
         (filter (comp not nil? val))
-        (into {})))
+        (into (array-map))))
    :state-type))
 (defn history-reductions [increments]
   (->> increments
-       (reductions history-merge {})
+       (reductions history-merge (array-map))
        rest))
 
 
@@ -136,10 +147,10 @@
          (if (= av bv)
            diff
            (assoc diff key (if (and av bv) (state-diff av bv) bv)))))
-     {} (concat (keys a) (keys b)))
+     (array-map) (concat (keys a) (keys b)))
     b))
 (defn history-to-increments [history]
-  (loop [prev {}, history history, increments []]
+  (loop [prev (array-map), history history, increments []]
     (if (empty? history) increments
         (recur
          (first history)
@@ -170,16 +181,38 @@
 
 
 (defn convert [create-object-from type amount]
-  (let [{local-db :remote-db} (configure)
-        objects (get-objects local-db type amount)]
+  (let [{db :remote-db} (configure)
+        objects (get-objects db type amount)]
     (println "objects total" objects)
     (doseq [index (-> objects count range)]
       (print index)
       (->> index
            (nth objects)
-           (create-object local-db create-object-from)
-           (dump-object local-db)))))
+           (create-object db create-object-from)
+           (dump-object db)))))
 
 (def do-display false)
 (defn convert-json [type amount]
   (convert create-json-object-from type amount))
+
+
+(defn crazy []
+  (sql/with-connection (:remote-db (configure))
+    (sql/with-query-results rs ["select history from history2 where type=? and user_space_id=?"
+                                "bulletin" 2839686]
+      (sql/update-or-insert-values
+       :history2
+       ["type=? and user_space_id= ?" "bulletin" 2839686]
+       {:history
+        (-> rs
+            first
+            :history
+            read-json
+            (assoc-in [:ol 0 :state :super-new-field] "message from the past, i hope you lived your life")
+            json-str)}))))
+
+(defn crazy-2 []
+  (sql/with-connection (:remote-db (configure))
+    (sql/with-query-results rs ["select history from history2 where type=? and user_space_id=?"
+                                "bulletin" 2839686]
+      (-> rs first :history read-json :ol (nth 0) println))))
