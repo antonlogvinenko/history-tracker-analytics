@@ -1,7 +1,8 @@
 (ns history-tracker-analytics.convert
   (:require [clojure.contrib.sql :as sql]
             [clojure.contrib.seq :as seq]
-            [clj-time.local :as time])
+            [clj-time.local :as time]
+            [clojure.contrib.profile :as profile])
   (:use [clojureql.core :only (table select where)]
         [clojure.data.json :only (json-str read-json)]
         [clojure.contrib.prxml :only (prxml)]
@@ -67,7 +68,7 @@
    :local-db (init-db (slurp local-mysql-config))})
 (defn- get-objects [db type amount]
   (sql/with-connection db
-    (sql/with-query-results rs ["select distinct user_space_id, type from history where type=? and (user_space_revision > 3 or local_revision > 3) limit ?" "bulletin" amount]
+    (sql/with-query-results rs ["select distinct user_space_id, type from history where type=? limit ?" type amount]
       (vec rs))))
 (defn- dump-object [db object]
   (sql/with-connection db
@@ -80,7 +81,7 @@
             "order by user_space_revision asc, local_revision asc")
        (object :user_space_id) (object :type)]
       (println " [" (count rs) "]")
-      (create-object-from rs))))
+      (profile/prof :creation (create-object-from rs)))))
 
 
 
@@ -180,9 +181,19 @@
 
 
 
-(defn convert [create-object-from type amount]
+(defn convert-1 [create-object-from type amount]
+(profile/prof :all  (let [{db :remote-db} (configure)
+        objects (get-objects db type amount)
+        new-objects (vec (map (partial create-object db create-object-from) objects))]
+    (println "objects total" objects)
+(profile/prof :insertion    (doseq [index (-> new-objects count range)]
+      (println index)
+      (->> index (nth new-objects) (dump-object db)))))))
+
+(defn convert-2 [create-object-from type amount]
   (let [{db :remote-db} (configure)
-        objects (get-objects db type amount)]
+        objects (get-objects db type amount)
+        new-objects (map (partial create-object db create-object-from) objects)]
     (println "objects total" objects)
     (doseq [index (-> objects count range)]
       (print index)
@@ -192,8 +203,13 @@
            (dump-object db)))))
 
 (def do-display false)
-(defn convert-json [type amount]
-  (convert create-json-object-from type amount))
+(defn convert-json-1 [type amount]
+  (convert-1 create-json-object-from type amount))
+
+(defn convert-json-2 [type amount]
+  (convert-2 create-json-object-from type amount))
+
+
 
 
 (defn crazy []
@@ -216,3 +232,11 @@
     (sql/with-query-results rs ["select history from history2 where type=? and user_space_id=?"
                                 "bulletin" 2839686]
       (-> rs first :history read-json :ol (nth 0) println))))
+
+(defn crazy-3 [amount]
+  (sql/with-connection (:remote-db (configure))
+    (sql/with-query-results rs ["select user_space_id, type from history limit ?" amount]
+      (-> rs count println))))
+
+
+;;224 421
