@@ -37,6 +37,15 @@
                      (.item 0)
                      (.getElementsByTagName "element"))]
     (map #(->> % (.item elements) convert-attr) (range (.getLength elements)))))
+;;xml to clojure data structures
+(defn get-value [attribute]
+  (let [field (->> "value" (. attribute getAttribute))]
+    (if (-> field empty? not)
+      field
+      (let [text (-> (. attribute getTextContent))]
+        (if (-> text empty? not)
+          text
+          "")))))
 
 (defn- convert-attr [attribute]
   (let [value (get-value attribute)
@@ -66,13 +75,14 @@
 (defn- configure []
   {:remote-db (init-db (slurp remote-mysql-config))
    :local-db (init-db (slurp local-mysql-config))})
-(defn- get-objects [db type amount]
+(defn- get-objects [db type start end]
   (sql/with-connection db
-    (sql/with-query-results rs ["select distinct user_space_id, type from history where type=? limit ?" type amount]
+    (sql/with-query-results rs
+      ["select distinct user_space_id, type from history where type=? and user_space_id >= ? and user_space_id < ?" type start end]
       (vec rs))))
-(defn- dump-object [db object]
+(defn- dump-object [db objects]
   (sql/with-connection db
-    (sql/insert-records :history2 object)))
+    (apply sql/insert-values :history2 [:type :user_space_id :history] objects)))
 (defn- create-object [db create-object-from object]
   (sql/with-connection db
     (sql/with-query-results rs
@@ -80,20 +90,11 @@
             "where user_space_id = ? and type = ? "
             "order by user_space_revision asc, local_revision asc")
        (object :user_space_id) (object :type)]
-      (println " [" (count rs) "]")
+      (print (object :user_space_id) ", ")
       (profile/prof :creation (create-object-from rs)))))
 
 
 
-;;xml to clojure data structures
-(defn get-value [attribute]
-  (let [field (->> "value" (. attribute getAttribute))]
-    (if (-> field empty? not)
-      field
-      (let [text (-> (. attribute getTextContent))]
-        (if (-> text empty? not)
-          text
-          "")))))
 (defn get-root [text]
   (let [source (InputSource. (StringReader. text))]
     (.. DocumentBuilderFactory
@@ -166,50 +167,32 @@
 (defn display[x] (if do-display (println x)) x)
 (defn send-json[x] (json-str x :escape-unicode false))
 (defn- create-json-object-from [rs]
-  (-> rs
-      first
-      (select-keys [:type :user_space_id])
-      (assoc :history (->> rs
-                           (reduce join-json [])
-                           history-reductions
-                           history-to-increments
-                           (typed-pack (-> rs first :type))
-                           send-json
-                           display))))
-                          
+  (let [a (first rs)]
+    [(a :type) (a :user_space_id)
+     (->> rs
+          (reduce join-json [])
+          history-reductions
+          history-to-increments
+          (typed-pack (a :type))
+          send-json
+          display)]))
 
 
-
-
-(defn convert-1 [create-object-from type amount]
-(profile/prof :all  (let [{db :remote-db} (configure)
-        objects (get-objects db type amount)
-        new-objects (vec (map (partial create-object db create-object-from) objects))]
-    (println "objects total" objects)
-(profile/prof :insertion    (doseq [index (-> new-objects count range)]
-      (println index)
-      (->> index (nth new-objects) (dump-object db)))))))
-
-(defn convert-2 [create-object-from type amount]
+(defn convert [create-object-from type start end]
   (let [{db :remote-db} (configure)
-        objects (get-objects db type amount)
-        new-objects (map (partial create-object db create-object-from) objects)]
-    (println "objects total" objects)
-    (doseq [index (-> objects count range)]
-      (print index)
-      (->> index
-           (nth objects)
-           (create-object db create-object-from)
-           (dump-object db)))))
+        objects (get-objects db type start end)
+        new-objects (vec (map (partial create-object db create-object-from) objects))]
+    (println "objects total" (count objects))
+    (dump-object db new-objects)))
+
 
 (def do-display false)
-(defn convert-json-1 [type amount]
-  (convert-1 create-json-object-from type amount))
-
-(defn convert-json-2 [type amount]
-  (convert-2 create-json-object-from type amount))
+(defn convert-json [type start end]
+  (time (convert create-json-object-from type start end)))
 
 
+;;1. calculate, then update +11% 
+;;2. batch insert
 
 
 (defn crazy []
@@ -239,4 +222,8 @@
       (-> rs count println))))
 
 
-;;224 421
+;;read with batch
+;;use pmap
+;;recalculate 36000 - 1 hour
+;;local performance?
+;;continue profiling
