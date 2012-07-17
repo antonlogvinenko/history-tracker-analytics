@@ -90,16 +90,24 @@
             "where user_space_id = ? and type = ? "
             "order by user_space_revision asc, local_revision asc")
        (object :user_space_id) (object :type)]
-      (print (object :user_space_id) ", ")
-      (profile/prof :creation (create-object-from rs)))))
+      ;;      (print (object :user_space_id) ", ")
+      (create-object-from rs))))
 
 
 
 (defn get-root [text]
-  (let [source (InputSource. (StringReader. text))]
-    (.. DocumentBuilderFactory
-        newInstance newDocumentBuilder
-        (parse source) getDocumentElement)))
+  (let [source
+        (InputSource. (StringReader. text))
+        document-builder
+        (.newDocumentBuilder
+         (doto (DocumentBuilderFactory/newInstance)
+           (.setNamespaceAware false)
+           (.setValidating false)
+           (.setFeature "http://xml.org/sax/features/namespaces" false)
+           (.setFeature "http://xml.org/sax/features/validation" false)
+           (.setFeature "http://apache.org/xml/features/nonvalidating/load-dtd-grammar" false)
+           (.setFeature "http://apache.org/xml/features/nonvalidating/load-external-dtd" false)))]
+    (.. document-builder (parse source) getDocumentElement)))
 (defn parse-json-attribute [json-map attribute]
   (assoc json-map (. attribute getAttribute "name") (convert-attr attribute)))
 (defn parse-json-attributes [attributes]
@@ -112,16 +120,15 @@
                    state-type :state_type
                    state-time :state_time
                   user-space-revision :user_space_revision}]
-  (let [state (xml-to-json (. state substring 54))
-        context (xml-to-json (. context substring 54))]
-    (conj
+  (let [state (xml-to-json state)
+        context (xml-to-json context)]
      history
      (assoc
        (if (nil? user-space-revision) {} {:user-space-revision user-space-revision})
        :state-type state-type
        :state-time (->> state-time .getTime (java.util.Date.) (.format df))
        :context context
-       :state state))))
+       :state state)))
 
 
 (defmulti history-merge (fn [x y] (every? map? [x y])))
@@ -169,27 +176,42 @@
 (defn- create-json-object-from [rs]
   (let [a (first rs)]
     [(a :type) (a :user_space_id)
-     (->> rs
-          (reduce join-json [])
+     (->> 
+          (reduce join-json [] rs)
           history-reductions
           history-to-increments
           (typed-pack (a :type))
-          send-json
-          display)]))
+          send-json)]))
 
 
 (defn convert [create-object-from type start end]
-  (let [{db :remote-db} (configure)
+  (let [{db :local-db} (configure)
         objects (get-objects db type start end)
         new-objects (vec (map (partial create-object db create-object-from) objects))]
     (println "objects total" (count objects))
     (dump-object db new-objects)))
 
+(defn parts[start step times]
+  (->> times
+       range
+       (map (partial * step))
+       (map (partial + start))
+       (map #(list % (+ % step)))))
+
 
 (def do-display false)
 (defn convert-json [type start end]
-  (time (convert create-json-object-from type start end)))
+  (time (seq? (convert create-json-object-from type start end))))
 
+
+(defn convert-json-parallel [type start step times]
+  (->>
+   times
+   (parts start step)
+   (pmap #(apply convert-json type %))))
+
+
+;;8 threads
 
 ;;1. calculate, then update +11% 
 ;;2. batch insert

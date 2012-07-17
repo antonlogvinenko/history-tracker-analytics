@@ -1,4 +1,4 @@
-c(ns history-tracker-analytics.collect
+(ns history-tracker-analytics.collect
   (:require [clojure.contrib.sql :as sql]
             [clojure.contrib.seq :as seq]
             [clj-time.local :as time]
