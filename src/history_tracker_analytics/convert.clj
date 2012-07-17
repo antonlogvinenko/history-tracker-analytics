@@ -6,27 +6,28 @@
   (:use [clojureql.core :only (table select where)]
         [clojure.data.json :only (json-str read-json)]
         [clojure.contrib.prxml :only (prxml)]
-        [clojure.contrib.duck-streams :only (with-out-writer)])
+        [clojure.contrib.duck-streams :only (with-out-writer)]
+        [clojure.contrib.profile :only (prof)])
   (:import [java.io StringReader]
            [javax.xml.parsers DocumentBuilderFactory]
            [org.xml.sax InputSource]
            [java.text.SimpleDateFormat]
            [javax.xml.transform.dom DOMResult]))
 
-
 (def df (java.text.SimpleDateFormat. "yyyy-MM-dd HH:mm:ss"))
-(def df2 (java.text.SimpleDateFormat. "yyy-MM-dd'T'HH:mm:ss"))
+(def df3 (java.text.SimpleDateFormat. "yyy-MM-dd'T'HH:mm:ss"))
 (def do-display true)
 
 (defn- get-int [value]
   (try (Integer/parseInt value) (catch Exception e)))
+
 
 (defn- get-double [value]
   (try (Double/parseDouble value) (catch Exception e)))
 
 (defn- get-date [value]
   (try (->> value (.parse df) (.format df))
-       (catch Exception e (try (->> value (.parse df2) (.format df))
+       (catch Exception e (try (->> value (.parse df3) (.format df))
                                (catch Exception e value)))))
 
 (def convert-attr)
@@ -90,38 +91,46 @@
             "where user_space_id = ? and type = ? "
             "order by user_space_revision asc, local_revision asc")
        (object :user_space_id) (object :type)]
-      ;;      (print (object :user_space_id) ", ")
       (create-object-from rs))))
 
 
+(defn create-document-builder []
+  (.newDocumentBuilder
+   (doto (DocumentBuilderFactory/newInstance)
+     (.setNamespaceAware false)
+     (.setValidating false)
+     (.setFeature "http://xml.org/sax/features/namespaces" false)
+     (.setFeature "http://xml.org/sax/features/validation" false)
+     (.setFeature "http://apache.org/xml/features/nonvalidating/load-dtd-grammar" false)
+     (.setFeature "http://apache.org/xml/features/nonvalidating/load-external-dtd" false))))
 
-(defn get-root [text]
+(def ^:dynamic document-builder (create-document-builder))
+
+(defn get-root [text document-builder]
   (let [source
-        (InputSource. (StringReader. text))
-        document-builder
-        (.newDocumentBuilder
-         (doto (DocumentBuilderFactory/newInstance)
-           (.setNamespaceAware false)
-           (.setValidating false)
-           (.setFeature "http://xml.org/sax/features/namespaces" false)
-           (.setFeature "http://xml.org/sax/features/validation" false)
-           (.setFeature "http://apache.org/xml/features/nonvalidating/load-dtd-grammar" false)
-           (.setFeature "http://apache.org/xml/features/nonvalidating/load-external-dtd" false)))]
+        (InputSource. (StringReader. text))]
     (.. document-builder (parse source) getDocumentElement)))
 (defn parse-json-attribute [json-map attribute]
   (assoc json-map (. attribute getAttribute "name") (convert-attr attribute)))
 (defn parse-json-attributes [attributes]
   (let [attributes (map #(.item attributes %) (range (.getLength attributes)))]
     (reduce parse-json-attribute (array-map) attributes)))
-(defn- xml-to-json [xml]
- (-> xml get-root (. getElementsByTagName "attribute") parse-json-attributes))
+
+  
+
+(defn- xml-to-json [document-builder xml]
+ (->
+      xml
+      (get-root document-builder)
+      (. getElementsByTagName "attribute") parse-json-attributes))
+
 (defn- join-json [history
                   {context :context state :state
                    state-type :state_type
                    state-time :state_time
                   user-space-revision :user_space_revision}]
-  (let [state (xml-to-json state)
-        context (xml-to-json context)]
+  (let [state (xml-to-json document-builder state)
+        context (xml-to-json document-builder context)]
     (merge
      history
      (assoc
@@ -172,7 +181,6 @@
     {:ol rs :ul []}
     {:ul rs :ol []}))
 
-(defn display[x] (if do-display (println x)) x)
 (defn send-json[x] (json-str x :escape-unicode false))
 (defn- create-json-object-from [rs]
   (let [a (first rs)]
@@ -186,11 +194,12 @@
 
 
 (defn convert [create-object-from type start end]
+  (println start end)
   (let [{db :local-db} (configure)
         objects (get-objects db type start end)
-        new-objects (vec (map (partial create-object db create-object-from) objects))]
-    (println "objects total" (count objects))
-    (dump-object db new-objects)))
+        new-objects (map (partial create-object db create-object-from) objects)
+        new-objects-2 (vec new-objects)]
+    (dump-object db new-objects-2)))
 
 (defn parts[start step times]
   (->> times
@@ -201,8 +210,14 @@
 
 
 (def do-display false)
+(def ^:dynamic df3)
+(def ^:dynamic df)
 (defn convert-json [type start end]
-  (time (seq? (convert create-json-object-from type start end))))
+  (time  (binding [document-builder (create-document-builder)
+                   df (java.text.SimpleDateFormat. "yyyy-MM-dd HH:mm:ss")
+                   df3 (java.text.SimpleDateFormat. "yyy-MM-dd'T'HH:mm:ss")]
+    (let [a  (convert create-json-object-from type start end)]
+      (if (seq? a) true a)))))
 
 
 (defn convert-json-parallel [type start step times]
@@ -210,6 +225,7 @@
    times
    (parts start step)
    (pmap #(apply convert-json type %))))
+
 
 
 ;;8 threads
