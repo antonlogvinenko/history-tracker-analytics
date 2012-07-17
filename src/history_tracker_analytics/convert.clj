@@ -122,13 +122,14 @@
                   user-space-revision :user_space_revision}]
   (let [state (xml-to-json state)
         context (xml-to-json context)]
+    (merge
      history
      (assoc
-       (if (nil? user-space-revision) {} {:user-space-revision user-space-revision})
+         (if (nil? user-space-revision) {} {:user-space-revision user-space-revision})
        :state-type state-type
        :state-time (->> state-time .getTime (java.util.Date.) (.format df))
        :context context
-       :state state)))
+       :state state))))
 
 
 (defmulti history-merge (fn [x y] (every? map? [x y])))
