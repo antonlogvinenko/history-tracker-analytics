@@ -52,13 +52,13 @@
   (let [value (get-value attribute)
         type (.getAttribute attribute "type")]
     (case type
-      "removed" nil
       "string" (get-date value)
-      "array" (get-array attribute)
       "integer" (Integer/parseInt value)
       "float" (Float/parseFloat value)
       "datetime" (get-date value)
+      "array" (get-array attribute)
       "boolean" (Boolean/parseBoolean value)
+      "removed" nil
       value)))
 
 
@@ -76,11 +76,27 @@
 (defn- configure []
   {:remote-db (init-db (slurp remote-mysql-config))
    :local-db (init-db (slurp local-mysql-config))})
+
+(def request
+  (str "select history.user_space_id as user_space_id, history.type as type, "
+       "user_space_revision, state, context, state_time, state_type, local_revision "
+       "from history inner join "
+       "(select distinct user_space_id, type from history "
+       "where type= ? and user_space_id >= ? and user_space_id < ?) as t "
+       "on t.user_space_id = history.user_space_id and t.type = history.type "
+       "order by user_space_revision desc, local_revision desc"))
+
 (defn- get-objects [db type start end]
   (sql/with-connection db
     (sql/with-query-results rs
-      ["select distinct user_space_id, type from history where type=? and user_space_id >= ? and user_space_id < ?" type start end]
-      (vec rs))))
+      [request type start end]
+      (->> rs
+           (reduce
+            (fn [map entry]
+              (update-in map [[(:type entry) (:user_space_id entry)]] #(cons entry %)))
+            {})
+           vals))))
+
 (defn- dump-object [db objects]
   (sql/with-connection db
     (apply sql/insert-values :history2 [:type :user_space_id :history] objects)))
@@ -91,7 +107,7 @@
             "where user_space_id = ? and type = ? "
             "order by user_space_revision asc, local_revision asc")
        (object :user_space_id) (object :type)]
-      (create-object-from rs))))
+      (prof :2-create-concrete (create-object-from rs)))))
 
 
 (defn create-document-builder []
@@ -197,9 +213,9 @@
   (println start end)
   (let [{db :local-db} (configure)
         objects (get-objects db type start end)
-        new-objects (map (partial create-object db create-object-from) objects)
-        new-objects-2 (vec new-objects)]
-    (dump-object db new-objects-2)))
+        new-objects (prof :1-create-object
+                      (vec (map create-object-from objects)))]
+     (dump-object db new-objects)))
 
 (defn parts[start step times]
   (->> times
@@ -208,16 +224,26 @@
        (map (partial + start))
        (map #(list % (+ % step)))))
 
+(defn- delete-objects [db]
+  (sql/with-connection db
+    (sql/delete-rows
+     :history2
+     ["id > 0"])))
 
 (def do-display false)
 (def ^:dynamic df3)
 (def ^:dynamic df)
 (defn convert-json [type start end]
-  (time  (binding [document-builder (create-document-builder)
-                   df (java.text.SimpleDateFormat. "yyyy-MM-dd HH:mm:ss")
-                   df3 (java.text.SimpleDateFormat. "yyy-MM-dd'T'HH:mm:ss")]
-    (let [a  (convert create-json-object-from type start end)]
-      (if (seq? a) true a)))))
+(time  (binding [document-builder (create-document-builder)
+            df (java.text.SimpleDateFormat. "yyyy-MM-dd HH:mm:ss")
+            df3 (java.text.SimpleDateFormat. "yyy-MM-dd'T'HH:mm:ss")]
+    (prof :0-all (let [a  (convert create-json-object-from type start end)]
+                   (if (seq? a) true a))))))
+
+(defn do-profile [amount]
+  (delete-objects (:local-db (configure)))
+  (profile/profile (convert-json "bulletin" 7000000 (+ 7000000 amount))))
+
 
 
 (defn convert-json-parallel [type start step times]
