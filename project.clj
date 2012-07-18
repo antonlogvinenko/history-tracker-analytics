@@ -13,4 +13,4 @@
                  ]
   :source-paths ["src/"]
   :jvm-opts ["-Xms1024M" "-Xmx2048M" "-Xmn512M" "-server"]
-  :main history-tracker-analytics.core)
+  :main history-tracker-analytics.convert)

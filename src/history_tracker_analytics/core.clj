@@ -21,7 +21,7 @@
     (println "4. capacity <value>")
     (println "5. time <value>")))
 
-(defn -main [& other]
+(defn main [& other]
   (if (= 0 (count other))
     (info)
     (let [mode (first other)

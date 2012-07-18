@@ -1,4 +1,5 @@
 (ns history-tracker-analytics.convert
+  (:gen-class :main true)
   (:require [clojure.contrib.sql :as sql]
             [clojure.contrib.seq :as seq]
             [clj-time.local :as time]
@@ -251,7 +252,13 @@
    (parts start step)
    (pmap #(apply convert-json type %))))
 
-
+(defn -main [type start step times & args]
+  (convert-json-parallel
+   type
+   (Integer/parseInt start)
+   (Integer/parseInt step)
+   (Integer/parseInt times))
+  (shutdown-agents))
 
 ;;8 threads
 
