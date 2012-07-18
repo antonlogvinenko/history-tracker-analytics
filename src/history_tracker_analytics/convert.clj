@@ -26,9 +26,10 @@
   (try (Double/parseDouble value) (catch Exception e)))
 
 (defn- get-date [value]
-  (try (->> value (.parse df) (.format df))
-       (catch Exception e (try (->> value (.parse df3) (.format df))
-                               (catch Exception e value)))))
+;;  (try (->> value (.parse df) (.format df))
+;;       (catch Exception e
+         (try (->> value (.parse df3) (.format df))
+                               (catch Exception e value)))
 
 (def convert-attr)
 
@@ -49,10 +50,10 @@
           "")))))
 
 (defn- convert-attr [attribute]
-  (let [value (get-value attribute)
-        type (.getAttribute attribute "type")]
-    (case type
-      "string" (get-date value)
+ (let [value (get-value attribute)
+       type (.getAttribute attribute "type")]
+   (case type
+     "string" (get-date value)
       "integer" (Integer/parseInt value)
       "float" (Float/parseFloat value)
       "datetime" (get-date value)
@@ -107,7 +108,7 @@
             "where user_space_id = ? and type = ? "
             "order by user_space_revision asc, local_revision asc")
        (object :user_space_id) (object :type)]
-      (prof :2-create-concrete (create-object-from rs)))))
+      (create-object-from rs))))
 
 
 (defn create-document-builder []
@@ -132,29 +133,28 @@
   (let [attributes (map #(.item attributes %) (range (.getLength attributes)))]
     (reduce parse-json-attribute (array-map) attributes)))
 
-  
 
 (defn- xml-to-json [document-builder xml]
- (->
-      xml
-      (get-root document-builder)
-      (. getElementsByTagName "attribute") parse-json-attributes))
+  (->
+   xml
+   (get-root document-builder)
+   (. getElementsByTagName "attribute") parse-json-attributes))
 
 (defn- join-json [history
                   {context :context state :state
                    state-type :state_type
                    state-time :state_time
                   user-space-revision :user_space_revision}]
-  (let [state (xml-to-json document-builder state)
-        context (xml-to-json document-builder context)]
-    (merge
-     history
-     (assoc
-         (if (nil? user-space-revision) {} {:user-space-revision user-space-revision})
-       :state-type state-type
-       :state-time (->> state-time .getTime (java.util.Date.) (.format df))
-       :context context
-       :state state))))
+(let [state (xml-to-json document-builder state)
+      context (xml-to-json document-builder context)]
+  (merge
+   history
+   (assoc
+       (if (nil? user-space-revision) {} {:user-space-revision user-space-revision})
+     :state-type state-type
+     :state-time (->> state-time .getTime (java.util.Date.) (.format df))
+     :context context
+     :state state))))
 
 
 (defmulti history-merge (fn [x y] (every? map? [x y])))
@@ -175,15 +175,15 @@
 
 ;;history to increments
 (defn state-diff [a b]
-  (if (every? (partial instance? java.util.Map) [a b])
+  (if (not-every? (partial instance? java.util.Map) [a b])
+    b
     (reduce
      (fn [diff key]
        (let [av (a key) bv (b key)]
          (if (= av bv)
            diff
            (assoc diff key (if (and av bv) (state-diff av bv) bv)))))
-     (array-map) (concat (keys a) (keys b)))
-    b))
+     (array-map) (concat (keys a) (keys b)))))
 (defn history-to-increments [history]
   (loop [prev (array-map), history history, increments []]
     (if (empty? history) increments
@@ -201,21 +201,20 @@
 (defn- create-json-object-from [rs]
   (let [a (first rs)]
     [(a :type) (a :user_space_id)
-     (->> 
-          (reduce join-json [] rs)
-          history-reductions
-          history-to-increments
-          (typed-pack (a :type))
-          send-json)]))
+     (->>
+      (reduce join-json [] rs)
+      history-reductions
+      history-to-increments
+      (typed-pack (a :type))
+      send-json)]))
 
 
 (defn convert [create-object-from type start end]
   (println start end)
-  (let [{db :local-db} (configure)
+  (let [{db :remote-db} (configure)
         objects (get-objects db type start end)
-        new-objects (prof :1-create-object
-                      (vec (map create-object-from objects)))]
-     (dump-object db new-objects)))
+        new-objects (vec (map create-object-from objects))]
+    (dump-object db new-objects)))
 
 (defn parts[start step times]
   (->> times
@@ -237,8 +236,8 @@
 (time  (binding [document-builder (create-document-builder)
             df (java.text.SimpleDateFormat. "yyyy-MM-dd HH:mm:ss")
             df3 (java.text.SimpleDateFormat. "yyy-MM-dd'T'HH:mm:ss")]
-    (prof :0-all (let [a  (convert create-json-object-from type start end)]
-                   (if (seq? a) true a))))))
+    (let [a  (convert create-json-object-from type start end)]
+      (if (seq? a) true a)))))
 
 (defn do-profile [amount]
   (delete-objects (:local-db (configure)))
