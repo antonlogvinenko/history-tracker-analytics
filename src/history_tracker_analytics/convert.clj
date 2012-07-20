@@ -233,12 +233,13 @@
 (def do-display false)
 (def ^:dynamic df3)
 (def ^:dynamic df)
-(defn convert-json [type start end]
+(defn convert-json [type [start end]]
+  (println type start end)
 (time  (binding [document-builder (create-document-builder)
             df (java.text.SimpleDateFormat. "yyyy-MM-dd HH:mm:ss")
             df3 (java.text.SimpleDateFormat. "yyy-MM-dd'T'HH:mm:ss")]
     (let [a  (convert create-json-object-from type start end)]
-      (if (seq? a) true a)))))
+      (if (seq? a) true false)))))
 
 (defn do-profile [amount]
   (delete-objects (:local-db (configure)))
@@ -246,18 +247,23 @@
 
 
 
-(defn convert-json-parallel [type start step times]
+(defn convert-json-parallel [type start step times threads]
   (->>
    times
    (parts start step)
-   (pmap #(apply convert-json type %))))
+   (partition threads)
+   (map (partial pmap (partial convert-json type)))
+   doall))
+   
 
-(defn -main [type start step times & args]
+
+(defn -main [type start step times threads & args]
   (convert-json-parallel
    type
    (Integer/parseInt start)
    (Integer/parseInt step)
-   (Integer/parseInt times))
+   (Integer/parseInt times)
+   (Integer/parseInt threads))
   (shutdown-agents))
 
 ;;8 threads
