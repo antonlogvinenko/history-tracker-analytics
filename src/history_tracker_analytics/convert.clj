@@ -80,19 +80,15 @@
    :local-db (init-db (slurp local-mysql-config))})
 
 (def request
-  (str "select history.user_space_id as user_space_id, history.type as type, "
-       "user_space_revision, state, context, state_time, state_type, local_revision "
-       "from history inner join "
-       "(select distinct user_space_id, type from history "
-       "where type= ? and user_space_id >= ? and user_space_id < ?) as t "
-       "on t.user_space_id = history.user_space_id and t.type = history.type "
-       "order by user_space_revision desc, local_revision desc"))
+  (str "select * from history where type=? and user_space_id between ? and ?"))
 
 (defn- get-objects [db type start end]
   (sql/with-connection db
     (sql/with-query-results rs
-      [request type start end]
+      [request type start (dec end)]
       (->> rs
+           (sort-by :user_space_id #(compare %2 %1))
+           (sort-by :local_revision #(compare %2 %1))
            (reduce
             (fn [map entry]
               (update-in map [[(:type entry) (:user_space_id entry)]] #(cons entry %)))
@@ -211,7 +207,6 @@
 
 
 (defn convert [create-object-from type start end]
-  (println start end)
   (let [{db :remote-db} (configure)
         objects (get-objects db type start end)
         new-objects (vec (map create-object-from objects))]
@@ -251,8 +246,8 @@
   (->>
    times
    (parts start step)
-   (partition threads)
-   (map (partial pmap (partial convert-json type)))
+   (partition-all threads)
+   (map (comp doall (partial pmap (partial convert-json type))))
    doall))
    
 
