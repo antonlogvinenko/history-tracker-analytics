@@ -248,6 +248,7 @@
    (parts start step)
    (partition-all threads)
    (map (comp doall (partial pmap (partial convert-json type))))
+;;ls   (pmap (partial convert-json type))
    doall))
    
 
@@ -267,19 +268,19 @@
 ;;2. batch insert
 
 
-(defn crazy []
+(defn crazy [type id]
   (sql/with-connection (:remote-db (configure))
     (sql/with-query-results rs ["select history from history2 where type=? and user_space_id=?"
-                                "bulletin" 2839686]
+                                type id]
       (sql/update-or-insert-values
        :history2
-       ["type=? and user_space_id= ?" "bulletin" 2839686]
+       ["type=? and user_space_id= ?" type id]
        {:history
         (-> rs
             first
             :history
             read-json
-            (assoc-in [:ol 0 :state :super-new-field] "message from the past, i hope you lived your life")
+            (assoc-in [:ol 33 :state-time] "2012-11-11 16:35:23")
             json-str)}))))
 
 (defn crazy-2 []
